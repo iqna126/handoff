@@ -1,0 +1,62 @@
+{
+  "versionInfo": {"hasModuleVersionChanged": false, "hasApiVersionChanged": false},
+  "data": {
+    "Response": {
+      "ResponseWOD": {
+        "ResponseWorkout": {
+          "Id": "9001",
+          "Name": "CrossFit - Mon, Aug 24",
+          "Notes": "Coach brief that runs several thousand characters in real life.",
+          "WorkoutComponents": {
+            "List": [
+              {
+                "Id": "1", "IsSection": true, "Name": "WARM-UP",
+                "Comment": "", "Description": "", "MeasureRepScheme": ""
+              },
+              {
+                "Id": "2", "IsSection": false, "Name": "General Warm-Up",
+                "Description": "2:00 Cardio Choice\n8 Alternating Scorpions\n10 Bootstrap Squats",
+                "MeasureRepScheme": "2 Sets", "Comment": ""
+              },
+              {
+                "Id": "3", "IsSection": true, "Name": "Back Squat",
+                "Comment": "% of 1RM Back Squat", "Description": "",
+                "MeasureRepScheme": "6 Sets"
+              },
+              {
+                "Id": "4", "IsSection": false, "Name": "",
+                "Description": "Every 2:00 x 6 Sets",
+                "MeasureRepScheme": "Set 1: 6 Reps @ 70%\nSet 2: 3 Reps @ 80%\nSet 3: 6 Reps @ 70%",
+                "Comment": ""
+              },
+              {
+                "Id": "0", "IsSection": false, "Name": "PLACEHOLDER",
+                "Description": "this is an OutSystems empty record and must be dropped",
+                "MeasureRepScheme": "", "Comment": ""
+              },
+              {
+                "Id": "5", "IsSection": true, "Name": "Business Time",
+                "Comment": "Score = Sum Total Reps", "Description": "",
+                "MeasureRepScheme": "6 rounds for reps"
+              },
+              {
+                "Id": "6", "IsSection": false, "Name": "",
+                "Description": "1:00 AMRAP\n10 Toes to Bar\nMax Thrusters in Remaining Time",
+                "MeasureRepScheme": "", "Comment": "Barbell: 95/65lb (43/30kg)"
+              },
+              {
+                "Id": "7", "IsSection": true, "Name": "PRVN RESET",
+                "Comment": "", "Description": "", "MeasureRepScheme": "For Quality"
+              },
+              {
+                "Id": "8", "IsSection": false, "Name": "",
+                "Description": "8 Prone Swimmers\n1:00 Frog Pose",
+                "MeasureRepScheme": "3 Sets", "Comment": ""
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

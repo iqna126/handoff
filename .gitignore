@@ -1,0 +1,26 @@
+# Secrets / local env
+.env
+.env.*
+.dev.vars
+!*.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Node / frontend tooling (for future web/)
+node_modules/
+
+# Cloudflare Workers
+.wrangler/
+
+# OS / editor cruft
+.DS_Store
