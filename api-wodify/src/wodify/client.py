@@ -41,6 +41,7 @@ class VersionStale(Exception):
 # 请求体补丁
 # --------------------------------------------------------------------------
 
+
 def set_field(body: Any, key: str, value: Any) -> int:
     """把 body 里**所有**名为 key 的叶子改成 value，返回改了几处。
 
@@ -66,14 +67,13 @@ def require_field(body: Any, key: str, value: Any) -> None:
     """set_field 的严格版：一处都没改到就抛异常。"""
     n = set_field(body, key, value)
     if n == 0:
-        raise NotPrimed(
-            f"请求体里没有 {key!r} —— 缓存的请求体可能是旧版抓的，需要重新 prime"
-        )
+        raise NotPrimed(f"请求体里没有 {key!r} —— 缓存的请求体可能是旧版抓的，需要重新 prime")
 
 
 # --------------------------------------------------------------------------
 # 过期检测
 # --------------------------------------------------------------------------
+
 
 def check_fresh(action_name: str, payload: dict) -> None:
     """响应自带版本标记。任一为真就说明缓存过期。
@@ -94,6 +94,7 @@ def check_fresh(action_name: str, payload: dict) -> None:
 # --------------------------------------------------------------------------
 # HTTP
 # --------------------------------------------------------------------------
+
 
 def _default_transport(url: str, headers: dict, body: bytes) -> tuple[int, bytes]:
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
@@ -126,8 +127,9 @@ class Client:
     def _url(self, path: str) -> str:
         return f"https://{self.host}/WodifyClient/screenservices/{path}"
 
-    def query(self, action_name: str, *, date: str | None = None,
-              program_id: str | None = None) -> dict:
+    def query(
+        self, action_name: str, *, date: str | None = None, program_id: str | None = None
+    ) -> dict:
         path = actions.resolve(action_name)
 
         primed = (self.session.get("actions") or {}).get(action_name)
@@ -139,9 +141,7 @@ class Client:
 
         if date is not None:
             if not _is_bare_date(date):
-                raise ValueError(
-                    f"SelectedDate 必须是裸的 YYYY-MM-DD，收到 {date!r}"
-                )
+                raise ValueError(f"SelectedDate 必须是裸的 YYYY-MM-DD，收到 {date!r}")
             # 两个平级对象里都有，必须都改
             require_field(body, "SelectedDate", date)
         if program_id is not None:
@@ -155,9 +155,7 @@ class Client:
             "Accept-Encoding": "gzip",
         }
 
-        status, raw = self.transport(
-            self._url(path), headers, json.dumps(body).encode("utf-8")
-        )
+        status, raw = self.transport(self._url(path), headers, json.dumps(body).encode("utf-8"))
 
         if status in (401, 403):
             raise SessionExpired(f"{action_name}：HTTP {status}，会话已失效，需人工登录")

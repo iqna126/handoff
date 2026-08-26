@@ -6,8 +6,15 @@ dependencies = []
 
 [project.optional-dependencies]
 prime = ["websockets>=12"]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.8"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+exclude = [".git", "__pycache__", "venv", ".venv"]
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "C4", "B"]

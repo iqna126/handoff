@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 
 EMPTY_ID = "0"
 
@@ -27,7 +26,9 @@ _TITLE_COOLDOWN = re.compile(r"^(cool[\s-]*down|prvn|reset|recovery|yoga|stretch
 _TITLE_ACCESSORY = re.compile(r"^(optional|accessor|extra credit|midline|core work)", re.I)
 _LIFT_WORDS = re.compile(
     r"(squat|deadlift|press|jerk|clean|snatch|bench|thruster|lunge|"
-    r"pull[\s-]?up|row(?!ing)|swing|carry|get[\s-]?up)", re.I)
+    r"pull[\s-]?up|row(?!ing)|swing|carry|get[\s-]?up)",
+    re.I,
+)
 _METCON_SCORE = re.compile(r"(round|amrap|for time|emom|interval|cal|tabata)", re.I)
 
 

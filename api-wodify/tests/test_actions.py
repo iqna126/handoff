@@ -16,7 +16,7 @@ class TestAllowlist:
     def test_every_registered_action_passes_write_guard(self):
         # 白名单里的每一条都必须自己也过得了守卫，
         # 否则说明我们登记了一个会改状态的端点
-        for name, path in actions.ACTIONS.items():
+        for _name, path in actions.ACTIONS.items():
             actions.assert_read_only(path)
 
 
@@ -55,8 +55,7 @@ class TestWriteGuard:
             "WodifyClient_DataFetch_WB/Schedule_OS/"
             "GetClassList_ForClient_WithReservationCounts_WB/"
             "DataActionGetClassList_ForClient_WithReservationCounts",
-            "WodifyClient_DataFetch_WB/WOD_Flow/GetAllWorkoutData_WB/"
-            "DataActionGetAllWorkoutData",
+            "WodifyClient_DataFetch_WB/WOD_Flow/GetAllWorkoutData_WB/DataActionGetAllWorkoutData",
         ]
         for path in safe:
             actions.assert_read_only(path)

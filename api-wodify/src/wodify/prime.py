@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import json
 import urllib.request
-from typing import Any
 
 from . import actions
 
@@ -116,7 +115,7 @@ def observe_to_session(
     而 re-prime 又抓不到任何新东西」—— 因为匹配不上。
     所以匹配失败时必须**明确报出来**，不能静默跳过。
     """
-    want = {name: path for name, path in actions.ACTIONS.items()}
+    want = dict(actions.ACTIONS)
     got: dict[str, dict] = {}
     unmatched: list[str] = []
 
@@ -170,9 +169,7 @@ def report(session: dict) -> str:
     if session.get("missing"):
         lines.append(f"MISSING   {session['missing']}  ← 这些动作没抓到，查询会失败")
     if session.get("unmatched_paths"):
-        lines.append(
-            "未匹配的路径（改版时对照这里找动作的新位置）："
-        )
+        lines.append("未匹配的路径（改版时对照这里找动作的新位置）：")
         for p in session["unmatched_paths"][:20]:
             lines.append("  " + p)
     return "\n".join(lines)

@@ -25,23 +25,36 @@ ACTIONS: dict[str, str] = {
     ),
     # WOD 正文。注意：这个动作在直接打开 workout 页时不会触发，
     # 只有从班级详情点进去才会 —— 见 prime.WORKOUT_WALK_JS
-    "workout": (
-        f"{DATA_FETCH}/WOD_Flow/GetAllWorkoutData_WB"
-        "/DataActionGetAllWorkoutData"
-    ),
+    "workout": (f"{DATA_FETCH}/WOD_Flow/GetAllWorkoutData_WB/DataActionGetAllWorkoutData"),
     # 我自己的预约历史。一次调用返回全部，范围过滤在客户端做更划算
     "bookings": (
-        f"{DATA_FETCH}/Reservation_OS/GetReservationHistory_WB"
-        "/DataActionGetReservationHistory"
+        f"{DATA_FETCH}/Reservation_OS/GetReservationHistory_WB/DataActionGetReservationHistory"
     ),
 }
 
 # 路径里出现这些词就意味着可能改动服务端状态
 WRITE_MARKERS = (
-    "create", "save", "update", "delete", "remove",
-    "reserve", "cancel", "signin", "signout", "checkin",
-    "purchase", "buy", "pay", "accept", "submit", "set",
-    "add", "edit", "log", "post", "put",
+    "create",
+    "save",
+    "update",
+    "delete",
+    "remove",
+    "reserve",
+    "cancel",
+    "signin",
+    "signout",
+    "checkin",
+    "purchase",
+    "buy",
+    "pay",
+    "accept",
+    "submit",
+    "set",
+    "add",
+    "edit",
+    "log",
+    "post",
+    "put",
 )
 
 
@@ -65,8 +78,8 @@ def assert_read_only(path: str) -> None:
 
 # 这些是只读路径里合法出现、但字面上撞到写标记的片段
 _SAFE_SUBSTRINGS = (
-    "dataaction",      # DataActionGetXxx
-    "datafetch",       # WodifyClient_DataFetch_WB
+    "dataaction",  # DataActionGetXxx
+    "datafetch",  # WodifyClient_DataFetch_WB
     "reservationcount",  # GetClassList_..._WithReservationCounts
     "reservationhistory",
 )
