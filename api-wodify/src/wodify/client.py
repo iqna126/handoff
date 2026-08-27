@@ -105,7 +105,12 @@ def _default_transport(url: str, headers: dict, body: bytes) -> tuple[int, bytes
                 raw = gzip.decompress(raw)
             return resp.status, raw
     except urllib.error.HTTPError as e:
-        return e.code, e.read()
+        raw = e.read()
+        # 请求头始终带 Accept-Encoding: gzip，错误响应一样可能被压缩；
+        # 不解压的话诊断信息里全是乱码字节，等于没报错原因
+        if e.headers.get("Content-Encoding") == "gzip":
+            raw = gzip.decompress(raw)
+        return e.code, raw
 
 
 class Client:

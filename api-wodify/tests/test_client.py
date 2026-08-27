@@ -1,4 +1,8 @@
+import gzip
+import io
 import json
+import urllib.error
+import urllib.request
 
 import pytest
 
@@ -73,6 +77,23 @@ class TestFreshness:
     def test_missing_versioninfo_is_not_an_error(self):
         # 有些动作不带 versionInfo，不应因此报错
         client.check_fresh("workout", {"data": 1})
+
+
+class TestDefaultTransport:
+    def test_decompresses_gzip_error_body(self, monkeypatch):
+        # 请求头始终带 Accept-Encoding: gzip，Wodify 的错误响应一样可能压缩过；
+        # 不解压的话调用方拿到的诊断信息就是一堆乱码字节
+        body = gzip.compress(b'{"error": "nope"}')
+
+        def fake_urlopen(req, timeout=30):
+            raise urllib.error.HTTPError(
+                "http://x", 400, "Bad Request", {"Content-Encoding": "gzip"}, io.BytesIO(body)
+            )
+
+        monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+        status, raw = client._default_transport("http://x", {}, b"{}")
+        assert status == 400
+        assert raw == b'{"error": "nope"}'
 
 
 class TestQuery:

@@ -50,6 +50,20 @@ class TestObserve:
         s = prime.observe_to_session([junk, obs(WORKOUT)], host="gym.wodify.com")
         assert s["captured"] == ["workout"]
 
+    def test_cookie_not_taken_from_unmatched_request(self):
+        # 命中 /screenservices/ 但不在白名单里的请求（换版后没登记过的 action，
+        # 或者以后 Wodify 加的新端点），它的 cookie/csrf 不能污染抓到的会话——
+        # 放在 matched 请求之前，模拟"污染源先被观察到"的真实顺序
+        unmatched = {
+            "url": PREFIX + "SomeOther_WB/SomeAction",
+            "headers": {"Cookie": "tracking_id=zzz", "X-CSRFToken": "unrelated"},
+            "body": None,
+        }
+        s = prime.observe_to_session([unmatched, obs(WORKOUT)], host="gym.wodify.com")
+        assert s["cookie"] == COOKIE, "未匹配请求的 cookie 不能混进抓到的会话里"
+        assert s["csrf"] == CSRF
+        assert "SomeOther_WB/SomeAction" in s["unmatched_paths"]
+
 
 class TestReport:
     def test_missing_is_visible(self):

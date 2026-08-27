@@ -49,8 +49,8 @@ class TestWriteGuard:
             actions.ACTIONS.update(original)
 
     def test_readonly_paths_not_falsely_refused(self):
-        # DataAction / DataFetch / ReservationCounts 字面上撞到写标记，
-        # 但它们是只读路径的合法组成部分
+        # 目前这两条路径压根不命中任何 WRITE_MARKERS，靠自己就能过关，
+        # 不代表 _is_false_positive 豁免机制本身被测到了——那个在下面单独测
         safe = [
             "WodifyClient_DataFetch_WB/Schedule_OS/"
             "GetClassList_ForClient_WithReservationCounts_WB/"
@@ -59,3 +59,26 @@ class TestWriteGuard:
         ]
         for path in safe:
             actions.assert_read_only(path)
+
+
+class TestFalsePositiveExemption:
+    """直接测 _is_false_positive 的位置判定逻辑，不依赖真实的 marker/安全片段
+    是否碰巧字面重合（现在这几个真实值从不重合，所以只能用构造出来的例子测）。
+    """
+
+    def test_marker_entirely_inside_a_safe_substring_is_exempt(self, monkeypatch):
+        monkeypatch.setattr(actions, "_SAFE_SUBSTRINGS", ("safechunk",))
+        low = "some/safechunk/path"
+        assert actions._is_false_positive(low, "chunk") is True
+
+    def test_marker_outside_any_safe_substring_is_not_exempt(self, monkeypatch):
+        monkeypatch.setattr(actions, "_SAFE_SUBSTRINGS", ("safechunk",))
+        low = "some/safechunk/set/path"
+        assert actions._is_false_positive(low, "set") is False
+
+    def test_marker_also_appearing_outside_a_safe_substring_is_not_exempt(self, monkeypatch):
+        # "reserve" 是 "reservecount" 的字面子串——旧写法只看 marker 是否
+        # 出现在某个安全片段里，会把路径里独立出现的另一个 "reserve" 也放过
+        monkeypatch.setattr(actions, "_SAFE_SUBSTRINGS", ("reservecount",))
+        low = "some/reservecount/reserve/path"
+        assert actions._is_false_positive(low, "reserve") is False

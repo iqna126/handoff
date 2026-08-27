@@ -22,6 +22,10 @@ WORKOUT_WALK_JS 就是为了复现这条路径。
 
 而且 OutSystems 会缓存数据动作，重访同一天不发请求。
 所以必须走一个**还没被缓存过的、且确实发布了 WOD 的日期**。
+
+**当前实现状态**：本文件只有离线可测的纯函数部分（`observe_to_session`/`report`）。
+真正驱动 CDP、附着到 Chrome、跑 `WORKOUT_WALK_JS` 并收集网络请求的那部分还没写
+（计划是单独的 `cdp.py`，见 DESIGN.md §6.9 的模块划分），首次真机验证之前需要先补上。
 """
 
 from __future__ import annotations
@@ -104,7 +108,7 @@ def observe_to_session(
 ) -> dict:
     """把嗅探到的请求列表整理成 session 缓存。
 
-    这一步是纯函数，可以离线测试 —— 网络部分在 capture() 里。
+    这一步是纯函数，可以离线测试 —— 真正跑 CDP 抓包的部分还没实现（见模块顶部说明）。
 
     observed 里每一项形如：
       {"url": ..., "headers": {...}, "body": {...}}
@@ -118,6 +122,10 @@ def observe_to_session(
     want = dict(actions.ACTIONS)
     got: dict[str, dict] = {}
     unmatched: list[str] = []
+    # 只从真正匹配上白名单的请求里取 cookie/csrf——不相关的请求（埋点、
+    # 未登记的 action）混进来的话，会静默把凭证换成错的，之后每次查询都 401
+    cookie = ""
+    csrf = ""
 
     for item in observed:
         url = item.get("url", "")
@@ -135,10 +143,6 @@ def observe_to_session(
             continue
         actions.assert_read_only(path)
         got[hit] = {"path": path, "body": item.get("body")}
-
-    cookie = ""
-    csrf = ""
-    for item in observed:
         h = {k.lower(): v for k, v in (item.get("headers") or {}).items()}
         cookie = cookie or h.get("cookie", "")
         csrf = csrf or h.get("x-csrftoken", "")

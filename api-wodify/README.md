@@ -18,8 +18,8 @@
 | `client.py` 请求体补丁 + 过期检测 | ✅ 20 个测试通过 |
 | `parse.py` Wodify JSON → sections | ✅ 12 个测试通过 |
 | `prime.py` 纯函数部分 | ✅ 7 个测试通过 |
-| `prime.py` CDP 抓取 | ⚠️ **未验证** —— 需要真实的已登录 Chrome |
-| `sync.py` 写入 Supabase | ⬜ 未实现 |
+| `prime.py` CDP 抓取（`cdp.py`） | ⬜ **未实现** —— 需要真实的已登录 Chrome 才能写、才能验证 |
+| `sync.py` 改成 POST 给 Worker 的 `/api/wod/ingest` | ⬜ 未实现（原计划直连 Supabase，已改为经 Worker 中转，见 `docs` 分支 DESIGN.md §6.6） |
 
 ```bash
 python -m pytest -q     # 48 passed，不需要网络

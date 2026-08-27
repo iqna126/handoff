@@ -61,5 +61,12 @@ class TestEmptyBehaviour:
         assert r["empty_reason"] is None, "空结果不得编造原因"
 
     def test_no_crash_on_garbage(self):
-        for junk in ({}, {"data": {}}, {"data": {"Response": {"ResponseWOD": {}}}}):
+        for junk in (
+            {},
+            {"data": {}},
+            {"data": {"Response": {"ResponseWOD": {}}}},
+            {"data": None},  # Wodify 完全可能返回这种形状，data 键存在但值是 null
+            {"data": {"Response": None}},
+            {"data": {"Response": {"ResponseWOD": None}}},
+        ):
             assert parse.parse_workout(junk)["sections"] == []

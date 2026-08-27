@@ -86,10 +86,20 @@ _SAFE_SUBSTRINGS = (
 
 
 def _is_false_positive(low: str, marker: str) -> bool:
+    """True 当且仅当 marker 在 low 里的每一次出现都落在某个安全片段内部。
+
+    做法：把所有已知安全片段从 low 里挖掉，marker 还在剩下的文本里出现，
+    说明存在一次跟安全片段无关的真实撞词，不能豁免。
+
+    之前的写法是 `safe in low and marker in safe`——不看位置，只要安全片段
+    出现在路径里的任何地方，marker 就整段豁免，哪怕两者压根不挨着。这不只是
+    "豁免机制形同虚设"：一旦某天新增的白名单动作路径里同时包含一个真实的写
+    标记和一个不相关的安全片段，旧写法会把那个真实的写操作也放行。
+    """
+    stripped = low
     for safe in _SAFE_SUBSTRINGS:
-        if safe in low and marker in safe:
-            return True
-    return False
+        stripped = stripped.replace(safe, "")
+    return marker not in stripped
 
 
 def resolve(name: str) -> str:

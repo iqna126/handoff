@@ -42,7 +42,7 @@ def _is_real(record: dict) -> bool:
     return rid is None or str(rid) != EMPTY_ID
 
 
-def _classify(title: str, scheme: str, region: str) -> str:
+def _classify(title: str, scheme: str) -> str:
     t = (title or "").strip()
     if _TITLE_WARMUP.match(t):
         return "warmup"
@@ -50,8 +50,6 @@ def _classify(title: str, scheme: str, region: str) -> str:
         return "cooldown"
     if _TITLE_ACCESSORY.match(t):
         return "accessory"
-    if region:
-        return region
     s = scheme or ""
     if _METCON_SCORE.search(s) or _METCON_SCORE.search(t):
         return "metcon"
@@ -64,21 +62,21 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
     """把 GetAllWorkoutData 的响应转成 {title, notes, sections[]}。
 
     拿不到内容时返回空 sections —— **不编造原因**。
-    调用方自己判断要不要回退到粘贴导入。
+    调用方自己判断要不要提示用户改用训练记录编辑器手写。
     """
-    workout = (
-        payload.get("data", payload)
-        .get("Response", {})
-        .get("ResponseWOD", {})
-        .get("ResponseWorkout", {})
-    )
+    # 每一层都用 `or {}` 而不是 `.get(key, {})`：后者只在 key 缺失时才生效，
+    # key 存在但值是 None（Wodify 完全可能返回 {"data": null}）时会拿到 None
+    # 而不是默认值，下一步 .get() 就直接崩溃
+    data = payload.get("data") or payload
+    response = data.get("Response") or {}
+    response_wod = response.get("ResponseWOD") or {}
+    workout = response_wod.get("ResponseWorkout") or {}
     if not workout:
         return {"title": "", "notes": "", "sections": [], "empty_reason": None}
 
     components = (workout.get("WorkoutComponents") or {}).get("List") or []
 
     sections: list[dict] = []
-    region = ""
     cur: dict | None = None
 
     for comp in components:
@@ -94,14 +92,9 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
         is_section = bool(comp.get("IsSection"))
 
         if is_section:
-            kind = _classify(name, scheme, "")
-            if kind in ("warmup", "cooldown", "accessory"):
-                region = kind
-            else:
-                region = ""
             cur = {
                 "id": f"s{len(sections) + 1}",
-                "kind": kind,
+                "kind": _classify(name, scheme),
                 "title": name,
                 "score": scheme,
                 "lines": [],
@@ -114,11 +107,13 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
                 cur["meta"].append(comment)
             continue
 
-        # 不是段落标记 → 归入当前段落；没有当前段落就开一个
+        # 不是段落标记 → 归入当前段落；没有当前段落就开一个。
+        # 这个分支只会在还没遇到任何段落标记时触发（一旦 cur 被设过就不会再变回
+        # None），所以这里没有"继承上一个段落的 kind"这回事可言，直接归类
         if cur is None:
             cur = {
                 "id": f"s{len(sections) + 1}",
-                "kind": _classify(name, scheme, region),
+                "kind": _classify(name, scheme),
                 "title": name,
                 "score": scheme,
                 "lines": [],
