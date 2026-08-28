@@ -2,10 +2,16 @@
 name = "handoff-api"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi>=0.115"]
+dependencies = ["fastapi"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.8", "httpx>=0.27"]
+
+# 这组是 pywrangler 部署工具本身需要的，跟上面 CI 用的 [project.optional-dependencies]
+# 是两回事——CI 用 `pip install -e ".[dev]"` 装，不会碰这里；这里给 `uv run pywrangler
+# deploy` 用，照抄 cloudflare/python-workers-examples 的 fastapi 示例
+[dependency-groups]
+dev = ["workers-py", "workers-runtime-sdk"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

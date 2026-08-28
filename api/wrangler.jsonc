@@ -1,7 +1,12 @@
 {
-  // ⚠️ 没有实际部署验证过，字段名/结构以 Cloudflare 当时的 Python Workers 文档为准
+  // 结构照抄 cloudflare/python-workers-examples 的 fastapi 示例（第一版手写的缺了
+  // python_dedicated_snapshot 这个 flag，也没有配套的 package.json，会导致依赖装不上）
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "handoff",
-  "main": "src/entry.py",
+  "main": "src/worker.py",
   "compatibility_date": "2026-08-27",
-  "compatibility_flags": ["python_workers"],
+  "compatibility_flags": ["python_workers", "python_dedicated_snapshot"],
+  "observability": {
+    "enabled": true,
+  },
 }

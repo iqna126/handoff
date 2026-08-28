@@ -1,4 +1,0 @@
-# Cloudflare Python Workers 用这个文件（不是 pyproject.toml）解析 Worker 运行时
-# 需要的依赖，走 Pyodide 的包索引，不是普通 pip install。
-# ⚠️ fastapi 能不能在 Pyodide 里跑还没有实际部署验证过，见 entry.py 顶部的说明。
-fastapi
