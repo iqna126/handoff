@@ -1,6 +1,6 @@
 {
   // ⚠️ 没有实际部署验证过，字段名/结构以 Cloudflare 当时的 Python Workers 文档为准
-  "name": "handoff-api",
+  "name": "handoff",
   "main": "src/entry.py",
   "compatibility_date": "2026-08-27",
   "compatibility_flags": ["python_workers"],
