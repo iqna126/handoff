@@ -138,7 +138,7 @@ burn WOD         → pullup_k, burpee, run, kb_swing
 `api/.dev.vars`（本地）和 `wrangler secret put`（线上）需要：
 
 ```
-SUPABASE_URL=https://axeqqltpmgzgncbqmkqy.supabase.co
+SUPABASE_URL=https://kuoqkjsyjgoegwjtygbj.supabase.co
 SUPABASE_JWT_SECRET=<Supabase 控制台 → Settings → API 里的 JWT Secret>
 SUPABASE_SERVICE_KEY=<同页面的 service_role key，绝不进前端>
 GEMINI_API_KEY=<Google AI Studio 申请>
@@ -152,7 +152,7 @@ RESEND_API_KEY=<Resend 控制台申请，用于验证码邮件和 wodify-pull �
 前端只需要（这两个是公开信息，可以进代码）：
 
 ```
-SUPABASE_URL=https://axeqqltpmgzgncbqmkqy.supabase.co
+SUPABASE_URL=https://kuoqkjsyjgoegwjtygbj.supabase.co
 SUPABASE_ANON_KEY=<anon public key>
 ```
 
