@@ -1,0 +1,9 @@
+{
+  // ⚠️ 没有实际部署验证过，Cloudflare 静态资源 Worker 的字段名/结构
+  // 以当时的文档为准，出错是正常的首次调试
+  "name": "handoff-web",
+  "compatibility_date": "2026-08-27",
+  "assets": {
+    "directory": "./",
+  },
+}
