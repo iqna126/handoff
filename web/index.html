@@ -8,6 +8,22 @@
   <body>
     <h1>handoff</h1>
     <p id="status">加载中…</p>
+
+    <div id="login" hidden>
+      <button id="google-btn" type="button">用 Google 登录</button>
+      <hr />
+      <form id="email-form">
+        <input type="email" id="email-input" placeholder="邮箱" required />
+        <button type="submit">发送验证码</button>
+      </form>
+      <form id="code-form" hidden>
+        <input type="text" id="code-input" placeholder="6 位验证码" required />
+        <button type="submit">验证</button>
+      </form>
+    </div>
+
+    <button id="logout-btn" type="button" hidden>退出登录</button>
+
     <script type="module" src="/js/main.js"></script>
   </body>
 </html>
