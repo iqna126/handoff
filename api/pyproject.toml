@@ -23,3 +23,8 @@ exclude = [".git", "__pycache__", "venv", ".venv"]
 
 [tool.ruff.lint]
 select = ["F", "E", "W", "I", "C4", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 的 Depends()/Query() 就是要写在参数默认值里，这是框架自己的用法，
+# 不是 B008 想抓的那种"函数调用当默认值"的真 bug
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]

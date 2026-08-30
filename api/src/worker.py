@@ -14,7 +14,7 @@ WorkerEntrypoint 子类而不是裸函数）都不对，这版按官方示例改
 
 from workers import WorkerEntrypoint
 
-from entry import app
+from entry import app, check_wods_freshness
 
 
 class Default(WorkerEntrypoint):
@@ -22,3 +22,9 @@ class Default(WorkerEntrypoint):
         import asgi
 
         return await asgi.fetch(app, request.js_object, self.env)
+
+    async def scheduled(self, controller, env, ctx):
+        """Cron Trigger：独立于常开机器的存活校验，见 entry.py 的
+        check_wods_freshness 和 DESIGN.md §6.6「独立存活校验」。
+        """
+        await check_wods_freshness(env)
