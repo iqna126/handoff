@@ -1,15 +1,18 @@
 """命令行入口：prime / workout / week / doctor。见 DESIGN.md §6.9 模块划分。
 
-查询相关命令只用标准库。prime 的真机抓包部分还没实现（见 prime.py 顶部说明），
-这里的 prime 子命令如实报告这一点，不假装能用——可见的失败优于不可见的错误。
+查询相关命令只用标准库。prime 需要 cdp.py 的可选依赖（websockets），
+且需要本地一个已登录 Wodify 的真实 Chrome——见 ops/cron-box-setup.md
+「prime 在哪里做」，设计上是在自己电脑上跑，不是常开机器上。
 
 `print_workout`/`run_week`/`cmd_doctor` 都不依赖"client 具体怎么来"，可以直接传
 一个用注入 transport 建出来的 Client 测试，不用真的读配置文件、连真实网络。
+`cmd_prime` 需要真机验证，测试里只能 mock 掉 cdp.capture 这个网络边界。
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 from datetime import date
 
@@ -62,12 +65,26 @@ def run_week(c: Client, start: date, ingest_url: str, sync_token: str, *, transp
 
 
 def cmd_prime(args: argparse.Namespace) -> int:
-    print(
-        "prime 的真机抓包部分还没实现——需要先写 cdp.py 驱动 CDP，"
-        "见 prime.py 顶部说明和 DESIGN.md §6.9。",
-        file=sys.stderr,
-    )
-    return 1
+    """连本地一个已登录 Wodify 的 Chrome，抓会话凭证并存到本地缓存。
+
+    需要先按 ops/cron-box-setup.md 的说明启动 Chrome（带
+    --remote-debugging-port）并手动登录一次 Wodify。
+    """
+    from . import cdp
+
+    try:
+        observed = asyncio.run(cdp.capture(args.cdp_url, args.host, args.date))
+    except ImportError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"抓取失败：{e}", file=sys.stderr)
+        return 1
+
+    session = prime.observe_to_session(observed, host=args.host)
+    prime.save_session(session, config.SESSION_CACHE_PATH)
+    print(prime.report(session))
+    return 1 if session.get("missing") else 0
 
 
 def cmd_workout(args: argparse.Namespace) -> int:
@@ -97,7 +114,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="wodify")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("prime", help="抓取会话凭证（真机抓包部分还没实现）")
+    p_prime = sub.add_parser("prime", help="抓取会话凭证（需要本地一个已登录 Wodify 的 Chrome）")
+    p_prime.add_argument("--host", required=True, help="Wodify 域名，比如 gym.wodify.com")
+    p_prime.add_argument(
+        "--date", required=True, help="YYYY-MM-DD，选一个还没被缓存过且确实发布了 WOD 的日期"
+    )
+    p_prime.add_argument("--cdp-url", default="http://localhost:9222", help="Chrome 的远程调试地址")
 
     p_workout = sub.add_parser("workout", help="查一天的 WOD")
     p_workout.add_argument("--date", required=True, help="YYYY-MM-DD")

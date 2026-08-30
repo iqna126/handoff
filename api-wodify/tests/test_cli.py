@@ -41,10 +41,48 @@ SESSION = {
 
 
 class TestCmdPrime:
-    def test_reports_not_implemented_honestly_and_fails(self, capsys):
-        code = cli.cmd_prime(argparse_namespace())
-        assert code == 1, "真机抓包没实现，不能假装成功返回 0"
-        assert "还没实现" in capsys.readouterr().err
+    """cmd_prime 本身需要真机验证，这里只 mock 掉 cdp.capture 这一个网络边界，
+    测的是 cmd_prime 自己的逻辑：拿到 observed 之后有没有正确存会话、报结果。
+    """
+
+    def test_saves_session_and_reports_missing_actions(self, tmp_path, monkeypatch, capsys):
+        async def fake_capture(cdp_url, host, target_date):
+            return [
+                {
+                    "url": (
+                        "https://gym.wodify.com/WodifyClient/screenservices/"
+                        "WodifyClient_DataFetch_WB/WOD_Flow/GetAllWorkoutData_WB/"
+                        "DataActionGetAllWorkoutData"
+                    ),
+                    "headers": {"Cookie": "nr1W_Theme_UI=abc", "X-CSRFToken": "x" * 28},
+                    "body": {"screenData": {"variables": {}}},
+                }
+            ]
+
+        monkeypatch.setattr("wodify.cdp.capture", fake_capture)
+        session_path = str(tmp_path / "session.json")
+        monkeypatch.setattr(cli.config, "SESSION_CACHE_PATH", session_path)
+
+        code = cli.cmd_prime(
+            argparse_namespace(host="gym.wodify.com", date="2026-08-24", cdp_url="http://x")
+        )
+
+        assert code == 1, "只抓到 workout，schedule/bookings 还缺，应该报非 0"
+        assert "workout" in capsys.readouterr().out
+        assert prime.load_session(session_path)["captured"] == ["workout"]
+
+    def test_capture_failure_is_reported_not_crashed(self, monkeypatch, capsys):
+        async def fake_capture(cdp_url, host, target_date):
+            raise RuntimeError("Chrome 没连上")
+
+        monkeypatch.setattr("wodify.cdp.capture", fake_capture)
+
+        code = cli.cmd_prime(
+            argparse_namespace(host="gym.wodify.com", date="2026-08-24", cdp_url="http://x")
+        )
+
+        assert code == 1
+        assert "抓取失败" in capsys.readouterr().err
 
 
 class TestPrintWorkout:
@@ -168,7 +206,9 @@ class TestArgParsing:
         assert args.start is None
 
     def test_main_dispatches_prime(self, capsys):
-        assert cli.main(["prime"]) == 1
+        # 没有真实 Chrome 可连，应该优雅地失败返回 1，不崩溃
+        code = cli.main(["prime", "--host", "gym.wodify.com", "--date", "2026-08-24"])
+        assert code == 1
 
 
 def argparse_namespace(**kwargs):
