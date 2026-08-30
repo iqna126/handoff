@@ -82,9 +82,29 @@ ssh -i ~/.ssh/oracle-cronbox ubuntu@<公网IP>
 
 ## 6. 装运行环境
 
-- headless Chrome（`prime` 需要真实 Chrome 进程，见 `api-wodify/src/wodify/prime.py`）
-- Python 3.11+
-- 跑一次 `prime`，人工核对 `report()` 的 `captured`/`missing`
+- Python 3.11+，装 `api-wodify`（`pip install -e .`）
+- **不用在这台机器上装 Chrome/登录 Wodify**——见下面「`prime` 在哪里做」
+
+### `prime` 在哪里做
+
+`prime`（抓取会话凭证）需要一个真实登录了 Wodify 的 Chrome。这台云机器没有图形界面，
+直接在上面登录意味着还要装一整套桌面环境 + VNC 远程桌面，只为了点几下登录，不划算。
+
+**改成在自己电脑上做**：
+
+1. 本地用日常的 Chrome 正常登录 Wodify
+2. 跑 `prime`（对应的 CDP 抓取代码目前还没写，等 `cdp.py` 做完后这里补充具体命令）
+3. 把抓到的会话文件（`prime.save_session()` 存的那个 JSON，里面是 cookie/csrf，
+   不是密码）**拷贝到云机器上**，路径对应 `config.py` 的 `WODIFY_SESSION_CACHE`
+   （默认 `~/.cache/wodify-pull/session.json`），权限记得收紧：
+   ```bash
+   scp -i ~/.ssh/oracle-cronbox <本地会话文件> ubuntu@<公网IP>:~/.cache/wodify-pull/session.json
+   ssh -i ~/.ssh/oracle-cronbox ubuntu@<公网IP> chmod 600 ~/.cache/wodify-pull/session.json
+   ```
+
+代价：会话过期需要重新登录时，要重复"本地 prime → 拷贝上去"这个动作，不能远程直接在
+服务器上处理。换来的是不用在服务器上装维护一整套桌面环境。如果之后觉得这个手动步骤
+太烦，可以再考虑装 Xvfb+VNC 把整个流程搬到服务器上，现在先不做。
 
 ## 7. 密钥
 
@@ -103,12 +123,20 @@ chmod 600 <存 WODIFY_SYNC_TOKEN 的文件>
 ## 8. 部署 cron
 
 按 `DESIGN.md` §6.6「调度」表：周一 03:00 跑一次抓整周（一次批量写入，不是拉一天写一天）。
-用 `crontab -e`（跑服务的普通用户下）加一行，具体命令等 `cli.py` 写完再定。
+`cli.py` 已经写好，`crontab -e`（跑服务的普通用户下）加一行：
+
+```cron
+0 3 * * 1 WODIFY_HOST=<场馆域名> WODIFY_INGEST_URL=https://handoff.irisssaq.workers.dev/api/wod/ingest WODIFY_SYNC_TOKEN=<跟 Worker 那边一致的值> /path/to/venv/bin/python -m wodify.cli week >> ~/wodify-pull.log 2>&1
+```
+
+`WODIFY_SESSION_CACHE` 不用显式传，`config.py` 的默认值就是上一步拷贝会话文件的那个路径。
+每日校验已经挪到 Worker 的 Cron Trigger 上（见 `api/wrangler.jsonc`），这台机器不用再跑
+每日检查这一条。
 
 ## 灾难恢复备忘
 
 如果这台机器整个丢了（磁盘损坏、被甲骨文回收等），恢复步骤：
 
 1. 按本文档 1-7 步重新建一台
-2. 重新跑一次 `prime`（需要真人在一个已登录 Wodify 的浏览器上配合）
+2. 在本地重新跑一次 `prime`，把会话文件拷贝过去（见第 6 节「`prime` 在哪里做」）
 3. `WODIFY_SYNC_TOKEN` 可以沿用旧的（Worker 侧不用跟着换），也可以顺手轮换一个新的
