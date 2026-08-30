@@ -312,7 +312,7 @@ create index on leaderboard_entries (movement_key, kg desc);   -- 排行榜排�
 | 方法 | 路径 | 入参 | 出参 | 说明 |
 |---|---|---|---|---|
 | GET | `/api/catalog` | — | `{version, movements[]}` | 动作目录，可公开、可缓存 |
-| POST | `/api/wod/ingest` | `{token, wods: [{day, class_type, sections, raw}]}` 或 `{token, error: {...}}` | `{written: N}` | wodify-pull 专用：批量写入一整周的数据，或上报故障。用 `WODIFY_SYNC_TOKEN` 校验，**不是**用户 JWT，不是给前端用的 |
+| POST | `/api/wod/ingest` | `Authorization: Bearer <WODIFY_SYNC_TOKEN>` + `{wods: [{day, class_type, sections, raw}]}` 或 `{error: {kind, detail}}` | `{written: N}` | wodify-pull 专用：批量写入一整周的数据，或上报故障。token 放 header 不放 body（跟用户 JWT 用同一个头，校验逻辑独立），**不是**用户 JWT，不是给前端用的 |
 | POST | `/api/wod/analyze` | `{sections, picks, logs}` | `{muscles[], skills[], draft}` | 肌群 + 自动解锁 + 生成草稿 |
 | POST | `/api/ai/polish` | `{draft}` | `{text}` | AI 润色，密钥在服务端 |
 | GET | `/api/leaderboard` | `?movement=back_squat` | `{entries[], my_rank}` | 排行榜 |
@@ -905,9 +905,9 @@ Worker 的环境变量用 `wrangler secret put` 设置，不写进仓库。仓�
 
 | 步骤 | 内容 | 说明 |
 |---|---|---|
-| 1 | 仓库骨架、建表 SQL、CI、部署跑通 | 空壳但能部署的两个站点 |
-| 2 | 登录（Google+邮箱）、数据上云、RLS、导入旧数据 | 能多人使用，数据不再丢 |
-| 3 | wodify-pull 主路径上线（见 §6.6/§6.9） | 自动同步成为训练记录的主路径 |
+| 1 | 仓库骨架、建表 SQL、CI、部署跑通 | ✅ 空壳但能部署的两个站点，已实测（`/api/health`、`web/` 首页均已上线验证） |
+| 2 | 登录（Google+邮箱）、数据上云、RLS | ✅ 已实测；「导入旧数据」确认不需要——没有真实积累的旧数据可迁移，不做 |
+| 3 | wodify-pull 主路径上线（见 §6.6/§6.9） | 🚧 `/api/wod/ingest`、独立存活校验、`sync.py`/`cli.py` 已完成且有测试；`prime.py` 真正驱动 CDP 抓包的部分（`cdp.py`）还没写，甲骨文云机器也还没注册——这两项做完才能真正跑通 |
 | 4 | `muscles.py`/`matcher.py` 移植 | 肌群统计、PR 扫描、技能自动解锁的基础 |
 | 5 | 前端功能全量搭建（今日/待办/想法/训练/PR墙/技能树/约课提醒/我的） | 跟现有单文件版功能对齐 |
 | 6 | AI 润色接入（密钥在 Worker） | 现有单文件版就有的功能，保留 |
