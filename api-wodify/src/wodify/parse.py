@@ -30,6 +30,15 @@ _LIFT_WORDS = re.compile(
     re.I,
 )
 _METCON_SCORE = re.compile(r"(round|amrap|for time|emom|interval|cal|tabata)", re.I)
+# workout 的 Name 字段形如 "CrossFit - Mon, Aug 24" / "CrossFit Pump & Burn - Sat, Aug 22"。
+# 课名不写死——用「英文课名 - 星期几」的通用模式，跟粘贴解析器曾用的规则同一个思路
+_CLASS_HEAD = re.compile(r"^(.+?)\s*[-–—]\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)", re.I)
+
+
+def class_type_from_title(title: str) -> str:
+    """从 workout 的 Name 字段里抠出课名，抠不出来就返回空字符串。"""
+    m = _CLASS_HEAD.match((title or "").strip())
+    return m.group(1).strip() if m else ""
 
 
 def _is_real(record: dict) -> bool:
@@ -156,12 +165,13 @@ def _lines_of(description: str, scheme: str, comment: str) -> list[str]:
     return out
 
 
-def to_wod_row(day: str, class_type: str, parsed: dict, raw: dict) -> dict:
+def to_wod_row(day: str, parsed: dict, raw: dict) -> dict:
     """转成 wods 表的一行。原文永久保留，方便日后用更好的规则重解析。"""
+    title = parsed["title"]
     return {
         "day": day,
-        "class_type": class_type,
-        "title": parsed["title"] or f"WOD {day}",
+        "class_type": class_type_from_title(title),
+        "title": title or f"WOD {day}",
         "sections": parsed["sections"],
         "raw": raw,
         "source": "wodify_api",

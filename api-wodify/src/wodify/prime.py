@@ -31,6 +31,7 @@ WORKOUT_WALK_JS 就是为了复现这条路径。
 from __future__ import annotations
 
 import json
+import os
 import urllib.request
 
 from . import actions
@@ -177,3 +178,17 @@ def report(session: dict) -> str:
         for p in session["unmatched_paths"][:20]:
             lines.append("  " + p)
     return "\n".join(lines)
+
+
+def save_session(session: dict, path: str) -> None:
+    """存到本地文件。里面是活的凭证（cookie/csrf），权限收紧到只有自己能读。"""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(session, f)
+    os.chmod(path, 0o600)
+
+
+def load_session(path: str) -> dict:
+    """读本地缓存的 session。没有就抛 FileNotFoundError——调用方决定怎么提示用户去 prime。"""
+    with open(path) as f:
+        return json.load(f)

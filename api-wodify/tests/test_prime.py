@@ -2,6 +2,11 @@
 网络与 CDP 部分测不了 —— 那部分首次运行必须人工核对。
 """
 
+import os
+import stat
+
+import pytest
+
 from wodify import prime
 
 COOKIE = "nr1W_Theme_UI=" + "a" * 184 + "; AuthenticationToken=bbb"
@@ -82,3 +87,21 @@ class TestReport:
         assert COOKIE not in text and CSRF not in text, (
             "缓存里是活的凭证，任何打印出来的地方都是 bug"
         )
+
+
+class TestSessionCache:
+    def test_round_trips(self, tmp_path):
+        s = prime.observe_to_session([obs(WORKOUT)], host="gym.wodify.com")
+        path = str(tmp_path / "session.json")
+        prime.save_session(s, path)
+        assert prime.load_session(path) == s
+
+    def test_saved_file_is_not_world_readable(self, tmp_path):
+        path = str(tmp_path / "session.json")
+        prime.save_session({"cookie": "secret"}, path)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        assert mode == 0o600, "缓存里是活的凭证，权限不能比 600 宽"
+
+    def test_missing_file_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            prime.load_session(str(tmp_path / "nope.json"))

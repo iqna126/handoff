@@ -54,6 +54,38 @@ class TestFieldTraps:
         assert parse.parse_workout(payload, include_notes=True)["notes"] != ""
 
 
+class TestClassTypeFromTitle:
+    @pytest.mark.parametrize(
+        "title,expected",
+        [
+            ("CrossFit - Mon, Aug 24", "CrossFit"),
+            ("CrossFit Pump & Burn - Sat, Aug 22", "CrossFit Pump & Burn"),
+            ("", ""),
+            ("no dash or weekday here", ""),
+        ],
+    )
+    def test_extracts_class_name(self, title, expected):
+        assert parse.class_type_from_title(title) == expected
+
+
+class TestToWodRow:
+    def test_derives_class_type_and_keeps_raw(self, payload):
+        parsed = parse.parse_workout(payload)
+        row = parse.to_wod_row("2026-08-24", parsed, payload)
+        assert row["day"] == "2026-08-24"
+        assert row["class_type"] == "CrossFit"
+        assert row["title"] == "CrossFit - Mon, Aug 24"
+        assert row["sections"] == parsed["sections"]
+        assert row["raw"] == payload
+        assert row["source"] == "wodify_api"
+
+    def test_falls_back_to_placeholder_title_when_empty(self):
+        parsed = {"title": "", "sections": []}
+        row = parse.to_wod_row("2026-08-24", parsed, {})
+        assert row["title"] == "WOD 2026-08-24"
+        assert row["class_type"] == ""
+
+
 class TestEmptyBehaviour:
     def test_missing_workout_returns_empty_without_inventing_reason(self):
         r = parse.parse_workout({"data": {"Response": {}}})
