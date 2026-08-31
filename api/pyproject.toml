@@ -2,10 +2,14 @@
 name = "handoff-api"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi"]
+# httpx 是真正的运行时依赖（entry.py 里发请求给 Supabase/Resend 用的），不是只在
+# 测试里用——之前只放在下面 dev extras 里，本地 pytest 能装到所以测试一直是绿的，
+# 但 `uv run pywrangler deploy` 只打包这里的 dependencies，实际部署的 Worker 里
+# 根本没有 httpx，一 import 就在 Pyodide 里报 ModuleNotFoundError，线上直接起不来。
+dependencies = ["fastapi", "httpx"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.8", "httpx>=0.27"]
+dev = ["pytest>=8", "ruff>=0.8"]
 
 # 这组是 pywrangler 部署工具本身需要的，跟上面 CI 用的 [project.optional-dependencies]
 # 是两回事——CI 用 `pip install -e ".[dev]"` 装，不会碰这里；这里给 `uv run pywrangler
