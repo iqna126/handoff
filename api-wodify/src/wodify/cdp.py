@@ -231,10 +231,11 @@ async def capture(cdp_url: str, host: str, target_date: str) -> dict:
     target_date 要选一个**还没被 OutSystems 缓存过、且确实发布了 WOD** 的日期
     （见 prime.py 模块说明），否则页面直接用缓存结果，一个请求都不发。
 
-    返回 {"observed": [...], "cookie": "..."}——observed 喂给
+    返回 {"observed": [...], "cookie": "...", "walk_log": {...}}——observed 喂给
     prime.observe_to_session()，cookie 是从浏览器直接读到的，要覆盖掉
     observe_to_session() 从 observed 里猜出来的那个（那个猜测在这个新设计下已经
-    不准了，因为不再从网络请求头拿 cookie）。
+    不准了，因为不再从网络请求头拿 cookie）。walk_log 只是诊断用的，不代表成败——
+    见函数末尾的说明。
     """
     session = await CdpSession.connect()
     observed: list[dict] = []
@@ -256,17 +257,19 @@ async def capture(cdp_url: str, host: str, target_date: str) -> dict:
         walk_task = asyncio.create_task(session.evaluate(script, await_promise=True))
         drain_task = asyncio.create_task(session.drain(30, collect))
         try:
-            value = await asyncio.wait_for(asyncio.shield(walk_task), timeout=45)
+            walk_log = await asyncio.wait_for(asyncio.shield(walk_task), timeout=45)
         except asyncio.TimeoutError:
-            value = {"error": "walk 超时"}
+            walk_log = {"error": "walk 超时"}
+        except Exception as e:  # noqa: BLE001 - 记下来诊断用，不在这里判断成败
+            walk_log = {"error": f"{type(e).__name__}: {e}"}
         await drain_task
-
-        if not value or not value.get("ok"):
-            raise RuntimeError(
-                f"WORKOUT_WALK_JS 没跑通，页面结构可能变了：{value}"
-                "（这是预期中最可能需要人工调整的地方，见模块顶部说明）"
-            )
     finally:
         await session.close()
 
-    return {"observed": observed, "cookie": cookie}
+    # walk_log（点没点到"WARM-UP"这几个字）只是诊断信息，不是成败判据——
+    # 点了"Go to workout"那一下，触发内容加载的请求就已经发出去了，不管最后
+    # 页面渲染成什么样。真正的成败判据是有没有嗅探到需要的请求，那个由
+    # 调用方（cli.cmd_prime）拿 observe_to_session() 算出的 missing 列表判断。
+    # 参考实现 wodify-cli 的 prime.py 是同一个思路：只在没抓到 csrf/moduleVersion
+    # 时才算失败，从不检查页面最终有没有显示某段特定文字。
+    return {"observed": observed, "cookie": cookie, "walk_log": walk_log}

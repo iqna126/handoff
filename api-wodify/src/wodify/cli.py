@@ -86,6 +86,9 @@ def cmd_prime(args: argparse.Namespace) -> int:
     # observed 里猜的——那个猜测只在旧的"从请求头嗅探"设计下准，现在不准了
     session["cookie"] = result["cookie"]
     prime.save_session(session, config.SESSION_CACHE_PATH)
+    # walk_log 只是诊断信息（点没点到某个按钮/文字），不代表成败——真正的成败判据
+    # 是下面 report() 里的 captured/missing，页面最终长什么样不重要
+    print(f"walk log: {result.get('walk_log')}")
     print(prime.report(session))
     return 1 if session.get("missing") else 0
 
