@@ -73,7 +73,14 @@ def _post_json(
     url: str, token: str, body: dict[str, Any], *, transport: Transport | None = None
 ) -> dict:
     transport = transport or _default_transport
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+    # urllib 默认的 User-Agent（"Python-urllib/x.y"）是已知的爬虫特征，真机测试时
+    # 被 Cloudflare 挡在边缘层（403 error code 1010，请求根本没到 Worker 代码），
+    # 换成一个诚实标出自己身份的 UA，不是伪装浏览器
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "wodify-pull/1.0 (+https://github.com/iqna126/handoff)",
+    }
     status, raw = transport(url, headers, json.dumps(body).encode("utf-8"))
     if status >= 400:
         raise RuntimeError(f"ingest 失败：HTTP {status} {raw[:200]!r}")

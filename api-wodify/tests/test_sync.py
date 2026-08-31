@@ -218,6 +218,24 @@ class TestPushToWorker:
         assert captured["headers"]["Authorization"] == "Bearer tok123"
         assert captured["body"] == {"wods": wods}
 
+    def test_sends_a_real_user_agent(self):
+        """urllib 默认的 User-Agent 是已知爬虫特征，真机测试时被 Cloudflare 的
+        边缘防护拦下来（403 error code 1010，请求根本没到 Worker），必须换成
+        一个诚实标出自己身份的 UA。
+        """
+        captured = {}
+
+        def transport(url, headers, body):
+            captured["headers"] = headers
+            return 200, json.dumps({"written": 0}).encode()
+
+        sync.push_to_worker(
+            "https://handoff.example/api/wod/ingest", "tok", [], transport=transport
+        )
+
+        ua = captured["headers"]["User-Agent"]
+        assert ua and "python-urllib" not in ua.lower()
+
     def test_error_status_raises(self):
         def transport(url, headers, body):
             return 500, b"boom"
