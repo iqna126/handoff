@@ -73,7 +73,7 @@ def cmd_prime(args: argparse.Namespace) -> int:
     from . import cdp
 
     try:
-        observed = asyncio.run(cdp.capture(args.cdp_url, args.host, args.date))
+        result = asyncio.run(cdp.capture(args.cdp_url, args.host, args.date))
     except ImportError as e:
         print(str(e), file=sys.stderr)
         return 1
@@ -81,7 +81,10 @@ def cmd_prime(args: argparse.Namespace) -> int:
         print(f"抓取失败：{e}", file=sys.stderr)
         return 1
 
-    session = prime.observe_to_session(observed, host=args.host)
+    session = prime.observe_to_session(result["observed"], host=args.host)
+    # cookie 直接用 CDP 从浏览器读到的那份，覆盖掉 observe_to_session() 从
+    # observed 里猜的——那个猜测只在旧的"从请求头嗅探"设计下准，现在不准了
+    session["cookie"] = result["cookie"]
     prime.save_session(session, config.SESSION_CACHE_PATH)
     print(prime.report(session))
     return 1 if session.get("missing") else 0
@@ -115,11 +118,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_prime = sub.add_parser("prime", help="抓取会话凭证（需要本地一个已登录 Wodify 的 Chrome）")
-    p_prime.add_argument("--host", required=True, help="Wodify 域名，比如 gym.wodify.com")
+    p_prime.add_argument("--host", default=config.WODIFY_HOST, help="Wodify 域名")
     p_prime.add_argument(
         "--date", required=True, help="YYYY-MM-DD，选一个还没被缓存过且确实发布了 WOD 的日期"
     )
-    p_prime.add_argument("--cdp-url", default="http://localhost:9222", help="Chrome 的远程调试地址")
+    p_prime.add_argument("--cdp-url", default=config.CDP_URL, help="Chrome 的远程调试地址")
 
     p_workout = sub.add_parser("workout", help="查一天的 WOD")
     p_workout.add_argument("--date", required=True, help="YYYY-MM-DD")

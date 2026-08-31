@@ -47,17 +47,20 @@ class TestCmdPrime:
 
     def test_saves_session_and_reports_missing_actions(self, tmp_path, monkeypatch, capsys):
         async def fake_capture(cdp_url, host, target_date):
-            return [
-                {
-                    "url": (
-                        "https://gym.wodify.com/WodifyClient/screenservices/"
-                        "WodifyClient_DataFetch_WB/WOD_Flow/GetAllWorkoutData_WB/"
-                        "DataActionGetAllWorkoutData"
-                    ),
-                    "headers": {"Cookie": "nr1W_Theme_UI=abc", "X-CSRFToken": "x" * 28},
-                    "body": {"screenData": {"variables": {}}},
-                }
-            ]
+            return {
+                "observed": [
+                    {
+                        "url": (
+                            "https://gym.wodify.com/WodifyClient/screenservices/"
+                            "WodifyClient_DataFetch_WB/WOD_Flow/GetAllWorkoutData_WB/"
+                            "DataActionGetAllWorkoutData"
+                        ),
+                        "headers": {"X-CSRFToken": "x" * 28},
+                        "body": {"screenData": {"variables": {}}},
+                    }
+                ],
+                "cookie": "nr1W_Theme_UI=abc; nr2W_Theme_UI=def; AuthenticationToken=ghi",
+            }
 
         monkeypatch.setattr("wodify.cdp.capture", fake_capture)
         session_path = str(tmp_path / "session.json")
@@ -69,7 +72,11 @@ class TestCmdPrime:
 
         assert code == 1, "只抓到 workout，schedule/bookings 还缺，应该报非 0"
         assert "workout" in capsys.readouterr().out
-        assert prime.load_session(session_path)["captured"] == ["workout"]
+        saved = prime.load_session(session_path)
+        assert saved["captured"] == ["workout"]
+        assert saved["cookie"] == "nr1W_Theme_UI=abc; nr2W_Theme_UI=def; AuthenticationToken=ghi", (
+            "cookie 应该用 CDP 直接读到的那份，不是从请求头里嗅探的（这次请求头里根本没有 Cookie）"
+        )
 
     def test_capture_failure_is_reported_not_crashed(self, monkeypatch, capsys):
         async def fake_capture(cdp_url, host, target_date):

@@ -89,6 +89,14 @@ class TestReport:
         )
 
 
+class TestDateLabel:
+    def test_formats_month_and_day(self):
+        assert prime.date_label("2026-08-31") == "August 31"
+
+    def test_no_leading_zero_on_day(self):
+        assert prime.date_label("2026-09-05") == "September 5"
+
+
 class TestSessionCache:
     def test_round_trips(self, tmp_path):
         s = prime.observe_to_session([obs(WORKOUT)], host="gym.wodify.com")

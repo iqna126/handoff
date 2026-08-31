@@ -23,74 +23,93 @@ WORKOUT_WALK_JS 就是为了复现这条路径。
 而且 OutSystems 会缓存数据动作，重访同一天不发请求。
 所以必须走一个**还没被缓存过的、且确实发布了 WOD 的日期**。
 
-**当前实现状态**：本文件只有离线可测的纯函数部分（`observe_to_session`/`report`）。
-真正驱动 CDP、附着到 Chrome、跑 `WORKOUT_WALK_JS` 并收集网络请求的那部分还没写
-（计划是单独的 `cdp.py`，见 DESIGN.md §6.9 的模块划分），首次真机验证之前需要先补上。
+**导航/点击逻辑照抄参考实现**（`git.luci.ooo/lucio/wodify-cli`，同一个场馆，同一个
+Wodify SPA 版本，见 DESIGN.md §6.6）：第一版自己猜的 CSS 选择器
+（`input[type=date]`、`[class*=ClassCard]`、`location.href` 直接跳转）在真机测试时
+全部落空——Wodify 的日期选择器是按 aria-label 点的自定义控件，不是原生 `<input
+type=date>`；班级行是按文本内容的正则匹配的，不是靠 class 名；导航要先走
+`WALK`（Home→Scheduler）触发 schedule 动作，再在已加载的页面里点导航文字，
+不能对着还没渲染的页面直接改 `location.href`。
+
+**当前实现状态**：本文件只有离线可测的纯函数部分（`observe_to_session`/`report`/
+`_date_label`）。真正驱动 CDP、附着到 Chrome、跑 `WORKOUT_WALK_JS` 并收集网络请求的
+部分在 `cdp.py`，首次真机验证过之前不代表这版选择器/时序一定对——Wodify 的页面
+结构随时可能再变。
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import urllib.request
 
 from . import actions
 
-# 复现「排程 → 选日期 → 进班级 → 点去看 workout」这条导航，
-# 顺带也会捕获班级详情的动作。
-# 注意：直接跳转 /WodifyClient/Exercise 是没用的（见模块说明）。
+#: 先走这两个静态页面触发 schedule 等动作，Home 是可靠的入口且会顺带填充
+#: 客户端变量。（path, 等待秒数）
+WALK = (
+    ("/WodifyClient/Home", 12),
+    ("/WodifyClient/Scheduler", 10),
+)
+
+# 复现「排程 → 选日期 → 进班级 → 点去看 workout」这条导航，顺带也会捕获班级详情的
+# 动作。这一步假设已经走完上面的 WALK、页面已经在 Scheduler 上——不对着空白页面
+# 改 location.href（第一版这么做过，行不通：脚本执行时页面可能还没渲染完）。
+#
+# 点击靠**匹配渲染出来的文字**，不靠 CSS class（Wodify 改版时 class 名比文字更容易
+# 变）：叶子节点（没有子元素）精确匹配文字才点，避免点中父容器。
 WORKOUT_WALK_JS = r"""
-(async (targetDate) => {
+(async () => {
   const log = [];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const q = sel => document.querySelector(sel);
-  const qa = sel => [...document.querySelectorAll(sel)];
   const clickText = (txt) => {
-    const el = qa('a,button,div[role=button]').find(
-      e => (e.textContent || '').trim().toLowerCase().includes(txt.toLowerCase()));
-    if (el) { el.click(); return true; }
-    return false;
+    const els = [...document.querySelectorAll('*')].filter(
+      e => e.childElementCount === 0 && e.textContent.trim() === txt);
+    if (!els.length) return false;
+    els[els.length - 1].click();
+    return true;
+  };
+  const clickAria = frag => {
+    const el = [...document.querySelectorAll('[aria-label]')]
+      .find(e => (e.getAttribute('aria-label') || '').includes(frag));
+    if (!el) return false;
+    el.click();
+    return true;
   };
 
-  location.hash = '';
-  if (!location.pathname.includes('/Schedule')) {
-    location.href = '/WodifyClient/Schedule';
-    await sleep(3000);
-  }
-  log.push('schedule=' + !!q('[class*=Schedule], [class*=schedule]'));
+  log.push('schedule=' + clickText('Schedule'));
+  await sleep(3500);
+  if (__DATE_LABEL__) { log.push('date=' + clickAria(__DATE_LABEL__)); await sleep(3500); }
 
-  // 选日期。日期控件的实现随版本变化，这里尽量宽松地找
-  const dateInput = q('input[type=date]') ||
-                    qa('input').find(i => /\d{4}-\d{2}-\d{2}/.test(i.value || ''));
-  if (dateInput) {
-    dateInput.value = targetDate;
-    dateInput.dispatchEvent(new Event('input', { bubbles: true }));
-    dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-    await sleep(2500);
-    log.push('date=true');
-  } else {
-    log.push('date=false');
-  }
+  const classPattern = /^[A-Za-z][^,]*:\s*\d{1,2}:\d{2}/;
+  const classes = [...document.querySelectorAll('*')]
+    .filter(e => e.childElementCount === 0 && classPattern.test(e.textContent.trim()))
+    .map(e => e.textContent.trim())
+    .filter((v, i, a) => a.indexOf(v) === i);
+  log.push('classes=' + classes.length);
+  if (!classes.length) return { ok: false, log, why: 'no classes on that date' };
 
-  // 进第一个班级
-  const rows = qa('[class*=ClassCard], [class*=class-row], tr').filter(
-    e => /\d{1,2}:\d{2}/.test(e.textContent || ''));
-  log.push('classes=' + rows.length);
-  if (!rows.length) return { ok: false, log };
-  rows[0].click();
-  await sleep(2500);
-  log.push('class=true');
+  log.push('class=' + clickText(classes[0]));
+  await sleep(4000);
+  const hasLink = document.body.innerText.includes('Go to workout');
+  log.push('hasGoToWorkout=' + hasLink);
+  if (!hasLink) return { ok: false, log, why: 'no workout posted for that class' };
 
-  // 点「Go to workout」
-  const ok = clickText('go to workout') || clickText('workout');
-  log.push('hasGoToWorkout=' + ok);
-  if (!ok) return { ok: false, log };
-  await sleep(3000);
-  log.push('goto=true');
-
-  return { ok: true, log };
-})(TARGET_DATE);
+  log.push('goto=' + clickText('Go to workout'));
+  await sleep(5000);
+  return { ok: document.body.innerText.includes('WARM-UP'), log };
+})();
 """
+
+
+def date_label(date_str: str) -> str:
+    """把 YYYY-MM-DD 转成 Wodify 日期按钮 aria-label 里用的片段，比如 "August 31"。
+
+    Wodify 的日期标签形如 "Monday, August 31, 2026"，匹配 "August 31" 这个子串就够。
+    """
+    parsed = datetime.date.fromisoformat(date_str)
+    return parsed.strftime("%B ") + str(parsed.day)
 
 
 class PrimeError(Exception):
