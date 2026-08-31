@@ -114,6 +114,11 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
             sections.append(cur)
             if comment:
                 cur["meta"].append(comment)
+            # 段落标记自己的 Description/MeasureRepScheme/Comment 往往就是这个
+            # 段落的全部正文——WARM-UP/Cool-Down 这类段落经常只有一个 IsSection
+            # 组件，重量、组数、视频链接全写在它自己的 Comment 里，不折进 lines
+            # 就等于内容彻底消失（只进了没人读的 meta）。跟下面两个分支保持一致。
+            cur["lines"].extend(_lines_of(description, scheme, comment))
             continue
 
         # 不是段落标记 → 归入当前段落；没有当前段落就开一个。

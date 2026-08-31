@@ -48,6 +48,23 @@ class TestFieldTraps:
         assert "Set 1: 6 Reps @ 70%" in joined
         assert "Set 2: 3 Reps @ 80%" in joined, "组次方案带真实换行，必须逐行拆开"
 
+    def test_section_markers_own_comment_and_scheme_are_visible(self, payload):
+        """段落标记（IsSection=true）自己的 Comment/MeasureRepScheme 常常就是
+        整个段落的正文（WARM-UP/Cool-Down 这类段落经常只有这一个组件）。
+        之前这部分只进了没人读的 meta 字段，lines 里完全看不到——真机测试时
+        表现为"WARM-UP 段落显示成空的"，被误判成内容缺失。
+        """
+        r = parse.parse_workout(payload)
+        back_squat = next(s for s in r["sections"] if s["title"] == "Back Squat")
+        joined = "\n".join(back_squat["lines"])
+        assert "6 Sets" in joined, "Back Squat 段落标记自己的 MeasureRepScheme 丢了"
+        assert "% of 1RM Back Squat" in joined, "Back Squat 段落标记自己的 Comment 丢了"
+
+        business_time = next(s for s in r["sections"] if s["title"] == "Business Time")
+        joined = "\n".join(business_time["lines"])
+        assert "6 rounds for reps" in joined
+        assert "Score = Sum Total Reps" in joined
+
     def test_empty_record_placeholder_dropped(self, payload):
         r = parse.parse_workout(payload)
         blob = json.dumps(r, ensure_ascii=False)
