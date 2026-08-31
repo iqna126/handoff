@@ -74,6 +74,7 @@ class CdpSession:
         self._ws = ws
         self._id = 0
         self.session_id: str | None = None
+        self.target_id: str | None = None
         self._pending: dict[int, asyncio.Future] = {}
         self._events: asyncio.Queue = asyncio.Queue()
         self._reader: asyncio.Task | None = None
@@ -111,6 +112,18 @@ class CdpSession:
             self._pending.clear()
 
     async def close(self) -> None:
+        """关掉自己开的标签页，再断连接。
+
+        `Target.createTarget` 开的标签页不会因为 WebSocket 断开而自动关闭——
+        之前这里只断了连接，标签页会一直留在 Chrome 里。prime 是要定期跑的
+        （cron），标签页会越攒越多，迟早把 Chrome 拖垮，所以必须显式关闭。
+        关闭标签页要趁 _reader 还在跑（等它的回复），顺序不能颠倒。
+        """
+        if self.target_id is not None:
+            try:
+                await self.call("Target.closeTarget", {"targetId": self.target_id})
+            except Exception:  # noqa: BLE001 - 关闭本来就是收尾动作，失败不该盖过原始异常
+                pass
         if self._reader is not None:
             self._reader.cancel()
             self._reader = None
@@ -145,8 +158,13 @@ class CdpSession:
         return raw.get("result", {})
 
     async def open_page(self, url: str = "about:blank") -> None:
-        """新开一个标签页并 attach 上去——不要去接一个猜出来的已有标签页。"""
+        """新开一个标签页并 attach 上去——不要去接一个猜出来的已有标签页。
+
+        记下 target_id，close() 时要用它把这个标签页关掉，不然标签页会一直
+        留在 Chrome 里（见 close() 的说明）。
+        """
         target = await self.call("Target.createTarget", {"url": url})
+        self.target_id = target["targetId"]
         att = await self.call(
             "Target.attachToTarget", {"targetId": target["targetId"], "flatten": True}
         )
