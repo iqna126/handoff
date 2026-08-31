@@ -1,18 +1,28 @@
 // hash 路由 + 底部 tab 导航。没有构建步骤，用最简单的方式做页面切换。
+//
+// PR 墙/技能树/小工具不单独占 tab——都收进"我的"里面（用户明确要求：
+// 底部 tab 只放最高频的几个）。profile.js 自己再管一层子路由
+// （#profile/pr、#profile/skills、#profile/tools/... ），router 这层
+// 只认 "profile" 这一个顶层 tab。
 import * as today from "./pages/today.js";
 import * as todos from "./pages/todos.js";
 import * as ideas from "./pages/ideas.js";
 import * as stub from "./pages/stub.js";
+import * as profile from "./pages/profile.js";
 
 const TABS = [
   { hash: "today", label: "今日", render: (el) => today.render(el) },
   { hash: "todos", label: "待办", render: (el) => todos.render(el) },
   { hash: "ideas", label: "想法", render: (el) => ideas.render(el) },
   { hash: "train", label: "训练", render: (el) => stub.render(el, "训练") },
-  { hash: "pr", label: "PR 墙", render: (el) => stub.render(el, "PR 墙") },
-  { hash: "skills", label: "技能树", render: (el) => stub.render(el, "技能树") },
-  { hash: "profile", label: "我的", render: (el) => stub.render(el, "我的") },
+  { hash: "profile", label: "我的", render: (el, sub) => profile.render(el, sub) },
 ];
+
+function currentTop() {
+  const raw = (location.hash || `#${TABS[0].hash}`).slice(1);
+  const [top, ...rest] = raw.split("/");
+  return { top, sub: rest.join("/") };
+}
 
 export function initRouter(navEl, mainEl) {
   navEl.innerHTML = "";
@@ -29,8 +39,8 @@ export function initRouter(navEl, mainEl) {
   let renderToken = 0;
 
   async function paint() {
-    const hash = (location.hash || `#${TABS[0].hash}`).slice(1);
-    const tab = TABS.find((t) => t.hash === hash) || TABS[0];
+    const { top, sub } = currentTop();
+    const tab = TABS.find((t) => t.hash === top) || TABS[0];
     navEl.querySelectorAll(".nav-tab").forEach((el) => {
       el.classList.toggle("nav-tab--active", el.getAttribute("href") === `#${tab.hash}`);
     });
@@ -38,7 +48,7 @@ export function initRouter(navEl, mainEl) {
     const myToken = ++renderToken;
     mainEl.innerHTML = "";
     try {
-      await tab.render(mainEl);
+      await tab.render(mainEl, sub);
     } catch (err) {
       if (myToken === renderToken) {
         mainEl.innerHTML = `<p class="error-hint">加载失败：${err.message}</p>`;

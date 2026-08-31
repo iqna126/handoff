@@ -11,7 +11,6 @@ async function render() {
 
   const auth = await import("./auth.js");
   const loginEl = document.getElementById("login");
-  const logoutBtn = document.getElementById("logout-btn");
   const appEl = document.getElementById("app");
   const emailForm = document.getElementById("email-form");
   const codeForm = document.getElementById("code-form");
@@ -22,7 +21,6 @@ async function render() {
     statusEl.hidden = !!session;
     statusEl.textContent = session ? "" : "未登录";
     loginEl.hidden = !!session;
-    logoutBtn.hidden = !session;
     appEl.classList.toggle("app--visible", !!session);
     if (!session) {
       // 退出登录后重新显示邮箱表单，而不是停在验证码那一步
@@ -69,10 +67,6 @@ async function render() {
     } catch (err) {
       alert(err.message);
     }
-  });
-
-  logoutBtn.addEventListener("click", () => {
-    auth.signOut().catch((err) => alert(err.message));
   });
 }
 

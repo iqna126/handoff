@@ -1,26 +1,43 @@
+/* 配色/圆角/字体照抄老版单文件 App（docs 分支 reference/current-app.html），
+   不是重新设计一套——用户对旧配色有视觉记忆，换成别的颜色会觉得"不对"。 */
 :root {
-  --color-bg: #ffffff;
-  --color-fg: #1a1a1a;
-  --color-muted: #767676;
-  --color-border: #e2e2e2;
-  --color-primary: #2f6fed;
-  --color-primary-fg: #ffffff;
-  --color-danger: #d1453b;
-  --color-card-bg: #f7f7f8;
+  --paper: #f4f2ec;
+  --card: #fbfaf7;
+  --ink: #232a26;
+  --ink-soft: #5c6660;
+  --ink-faint: #9aa39d;
+  --rule: #e4e1d8;
+  --sage: #6e8b7b;
+  --sage-deep: #3a4a42;
+  --sage-wash: #e8eeea;
+  --sage-mid: #a8bfb0;
+  --signal: #c25e3a;
+  --r: 14px;
+  --rl: 20px;
+  --tabh: calc(64px + env(safe-area-inset-bottom));
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei",
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue",
     sans-serif;
-  color: var(--color-fg);
-  background: var(--color-bg);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -29,12 +46,30 @@ input {
   color: inherit;
 }
 
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.display {
+  font-family: "Songti SC", "Source Han Serif SC", Georgia, serif;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.display.sm {
+  font-size: 25px;
+}
+
 /* ---------- 登录页 ---------- */
 
 #login {
   max-width: 320px;
   margin: 15vh auto 0;
-  padding: 0 16px;
+  padding: 0 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -49,22 +84,24 @@ input {
   flex: 1;
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
 }
 
-#login button,
-#logout-btn {
+#login button {
   padding: 10px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg);
+  border: none;
+  border-radius: var(--r);
+  background: var(--sage);
+  color: #fff;
+  font-weight: 600;
   cursor: pointer;
 }
 
 #status {
   text-align: center;
-  color: var(--color-muted);
+  color: var(--ink-faint);
   padding: 12px;
 }
 
@@ -82,9 +119,8 @@ input {
 
 #main {
   flex: 1;
-  padding: 16px;
-  padding-bottom: 76px; /* 留出底部 tab bar 的高度 */
-  max-width: 640px;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px calc(var(--tabh) + 24px);
+  max-width: 520px;
   width: 100%;
   margin: 0 auto;
 }
@@ -94,41 +130,57 @@ input {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 50;
   display: flex;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg);
-  /* 兼容 iPhone 底部安全区，不用 inset:0 那套（SPEC.md §9.1 明确踩过的坑） */
+  background: rgba(251, 250, 247, 0.94);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rule);
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .nav-tab {
   flex: 1;
   text-align: center;
-  padding: 10px 4px;
-  font-size: 12px;
-  color: var(--color-muted);
+  padding: 11px 4px 9px;
+  font-size: 11px;
+  color: var(--ink-faint);
   text-decoration: none;
 }
 
 .nav-tab--active {
-  color: var(--color-primary);
-  font-weight: 600;
+  color: var(--sage-deep);
+  font-weight: 700;
 }
 
 h2 {
-  font-size: 15px;
-  color: var(--color-muted);
-  margin: 20px 0 8px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--sage);
+  font-weight: 700;
+  margin: 26px 0 10px;
 }
 
 .empty-hint {
-  color: var(--color-muted);
-  font-size: 14px;
+  color: var(--ink-faint);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px 0;
   list-style: none;
 }
 
 .error-hint {
-  color: var(--color-danger);
+  color: var(--signal);
+}
+
+button.linklike {
+  border: none;
+  background: none;
+  color: var(--sage);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
 }
 
 /* ---------- 日历 ---------- */
@@ -152,91 +204,150 @@ h2 {
   font-size: 18px;
   cursor: pointer;
   padding: 4px 8px;
-  color: var(--color-fg);
+  color: var(--sage-deep);
 }
 
 .cal-nav-title {
   font-weight: 600;
+  font-family: var(--font-mono);
   min-width: 96px;
   text-align: center;
 }
 
 .cal-mode-toggle {
   display: flex;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 2px;
 }
 
 .cal-mode-btn {
   border: none;
-  background: var(--color-bg);
-  padding: 6px 10px;
+  background: none;
+  padding: 5px 14px;
+  border-radius: 999px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
 }
 
 .cal-mode-btn--active {
-  background: var(--color-primary);
-  color: var(--color-primary-fg);
+  background: var(--sage);
+  color: #fff;
 }
 
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .cal-weekday {
   text-align: center;
-  font-size: 12px;
-  color: var(--color-muted);
-  padding: 4px 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+  padding-bottom: 4px;
 }
 
 .cal-cell {
   position: relative;
   aspect-ratio: 1;
-  border: none;
+  border: 1.5px solid transparent;
   background: none;
-  border-radius: 8px;
+  border-radius: 11px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font-mono);
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--ink);
 }
 
 .cal-cell--dim {
-  color: var(--color-muted);
-  opacity: 0.5;
+  color: var(--ink-faint);
+  opacity: 0.45;
 }
 
-/* 今天：实心主色块。选中：描边。两者叠加：实心+深色描边。三种状态互相独立
-   （SPEC.md §1.1 明确要求，之前的实现把这两个状态混在一起过）。 */
+/* 今天：实心 sage。选中：sage-deep 描边。两者叠加：描边换成更深的 ink，
+   三种状态互相独立（SPEC.md §1.1 明确要求）。 */
 .cal-cell--today {
-  background: var(--color-primary);
-  color: var(--color-primary-fg);
+  background: var(--sage);
+  border-color: var(--sage);
+  color: #fff;
 }
 
 .cal-cell--selected {
-  box-shadow: inset 0 0 0 2px var(--color-fg);
+  border-color: var(--sage-deep);
 }
 
 .cal-cell--today.cal-cell--selected {
-  box-shadow: inset 0 0 0 2px #0a1f52;
+  border-color: var(--ink);
 }
 
 .cal-dot {
   position: absolute;
-  bottom: 4px;
+  bottom: 5px;
   left: 50%;
   transform: translateX(-50%);
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--sage);
+}
+
+.cal-cell--today .cal-dot {
+  background: #fff;
+}
+
+/* ---------- 卡片 / 表单基础样式 ---------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--rl);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.field-row {
+  display: flex;
+  gap: 8px;
+}
+
+.field-row input[type="text"],
+.field-row input[type="number"],
+.field-row input[type="email"] {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
+}
+
+.btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--r);
+  background: var(--sage);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn.ghost {
+  background: none;
+  color: var(--sage-deep);
+  border: 1px dashed var(--rule);
+}
+
+.btn.danger {
+  background: var(--signal);
 }
 
 /* ---------- 待办 ---------- */
@@ -251,41 +362,45 @@ h2 {
   flex: 1;
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
 }
 
 .todo-date-btn {
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-card-bg);
+  border: none;
+  border-radius: var(--r);
+  background: var(--sage-wash);
+  color: var(--sage-deep);
+  font-weight: 600;
+  font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
 }
 
-/* 日期选择器：绝对定位在输入框下面，不用 inset:0 全屏遮罩那一套写法——
-   那套写法在移动端会把弹层撑到布局视口而不是可见区域（SPEC.md §9.1 踩过）。 */
 .todo-picker {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
   z-index: 10;
   width: 280px;
-  padding: 12px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--rl);
+  box-shadow: 0 8px 24px rgba(35, 42, 38, 0.15);
 }
 
 .todo-picker-today {
-  margin-top: 8px;
+  margin-top: 10px;
   width: 100%;
   padding: 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-card-bg);
+  border: none;
+  border-radius: var(--r);
+  background: var(--sage-wash);
+  color: var(--sage-deep);
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -302,9 +417,16 @@ h2 {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  background: var(--color-card-bg);
-  border-radius: 8px;
+  padding: 9px 12px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+}
+
+.todo-row input[type="checkbox"] {
+  accent-color: var(--sage);
+  width: 18px;
+  height: 18px;
 }
 
 .todo-row__title {
@@ -314,14 +436,14 @@ h2 {
 .todo-row__day {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--color-muted);
+  color: var(--ink-faint);
 }
 
 .todo-row__delete,
 .idea-row__delete {
   border: none;
   background: none;
-  color: var(--color-danger);
+  color: var(--signal);
   font-size: 13px;
   cursor: pointer;
 }
@@ -339,17 +461,19 @@ h2 {
   flex: 1;
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
 }
 
 .idea-form button,
 .idea-quick-form button {
-  padding: 10px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-primary);
-  color: var(--color-primary-fg);
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--r);
+  background: var(--sage);
+  color: #fff;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -363,46 +487,52 @@ h2 {
 }
 
 .idea-row {
-  padding: 10px 12px;
-  background: var(--color-card-bg);
-  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
   position: relative;
 }
 
 .idea-row__time {
   display: block;
-  font-size: 12px;
-  color: var(--color-muted);
+  font-size: 11px;
+  color: var(--ink-faint);
   margin-bottom: 4px;
 }
 
 .idea-row__text {
   margin: 0;
   white-space: pre-wrap;
+  padding-right: 40px;
 }
 
 .idea-row__delete {
   position: absolute;
-  top: 10px;
-  right: 12px;
+  top: 12px;
+  right: 14px;
 }
 
 /* ---------- 训练记录（今日 tab 的纯展示卡片） ---------- */
 
 .workout-card {
-  padding: 12px;
-  background: var(--color-card-bg);
-  border-radius: 8px;
+  padding: 14px;
+  background: var(--sage-wash);
+  border: 1px solid var(--sage-mid);
+  border-radius: var(--rl);
+  margin-bottom: 10px;
 }
 
 .workout-card h3 {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-family: "Songti SC", serif;
+  font-size: 16px;
 }
 
 .workout-card__body {
   font-family: var(--font-mono);
   font-size: 13px;
+  color: var(--ink-soft);
   white-space: pre-wrap;
   margin: 0;
 }
@@ -415,8 +545,557 @@ h2 {
 }
 
 .muscle-tag {
-  font-size: 12px;
-  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
   border-radius: 999px;
-  background: var(--color-border);
+  background: var(--card);
+  color: var(--sage-deep);
+}
+
+/* ---------- 我的 ---------- */
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.profile-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: var(--ink-faint);
+  font-weight: 700;
+}
+
+.profile-name {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: "Songti SC", serif;
+}
+
+.profile-status {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+.entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.entry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 4px;
+  border-bottom: 1px solid var(--rule);
+  width: 100%;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.entry-row:last-child {
+  border-bottom: none;
+}
+
+.entry-row__hint {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.tools-grid {
+  display: flex;
+  gap: 10px;
+}
+
+.tool-card {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--rl);
+  padding: 14px 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-card__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--sage-wash);
+  color: var(--sage-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 9px;
+}
+
+.tool-card__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.back-btn {
+  border: none;
+  background: none;
+  color: var(--sage-deep);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- PR 墙 ---------- */
+
+.pr-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+}
+
+.pr-card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--rl);
+  padding: 12px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pr-card--blank {
+  opacity: 0.55;
+}
+
+.pr-card__code {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--sage-deep);
+  background: var(--sage-wash);
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+
+.pr-card__name {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 6px;
+  line-height: 1.3;
+  min-height: 31px;
+}
+
+.pr-card__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--sage-deep);
+  margin-top: 8px;
+  font-family: var(--font-mono);
+}
+
+.pr-card__value--dash {
+  color: var(--ink-faint);
+}
+
+.pct-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+  margin: 14px 0;
+}
+
+.pct-cell {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  padding: 8px 2px;
+  text-align: center;
+}
+
+.pct-cell--hi {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: #fff;
+}
+
+.pct-cell__pct {
+  font-size: 9px;
+  color: var(--ink-faint);
+}
+
+.pct-cell--hi .pct-cell__pct {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.pct-cell__val {
+  font-size: 15px;
+  font-weight: 700;
+  margin-top: 1px;
+  font-family: var(--font-mono);
+}
+
+.pct-cell__exact {
+  font-size: 9px;
+  margin-top: 1px;
+  opacity: 0.7;
+}
+
+.unit-toggle {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.unit-toggle .on {
+  color: var(--sage-deep);
+}
+
+.plate-breakdown {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 6px;
+}
+
+/* ---------- 技能树 ---------- */
+
+.skill-search {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
+  margin-bottom: 12px;
+}
+
+.skill-progress {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.skill-progress__count {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.skill-progress__count b {
+  font-size: 20px;
+  color: var(--sage-deep);
+}
+
+.skill-bar {
+  width: 110px;
+  height: 4px;
+  background: var(--rule);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.skill-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--sage);
+}
+
+.chip-row {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  margin: 14px 0;
+  padding-bottom: 2px;
+}
+
+.chip {
+  flex: none;
+  padding: 7px 15px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.chip--active {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: #fff;
+  font-weight: 600;
+}
+
+.wish-box {
+  background: var(--sage-wash);
+  border: 1px solid var(--sage-mid);
+  border-radius: var(--rl);
+  padding: 13px 14px;
+  margin-bottom: 18px;
+}
+
+.wish-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--sage-mid);
+  border-radius: var(--r);
+  padding: 9px 11px;
+  margin-top: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.heart-btn {
+  font-size: 17px;
+  color: var(--ink-faint);
+  padding: 2px 5px;
+  line-height: 1;
+  border: none;
+  background: none;
+  cursor: pointer;
+  flex: none;
+}
+
+.heart-btn--on {
+  color: var(--signal);
+}
+
+.skill-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 22px 0 9px;
+}
+
+.skill-group-head__en {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.skill-group-head__zh {
+  font-size: 11px;
+  color: var(--ink-faint);
+  flex: 1;
+}
+
+.skill-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--rl);
+  padding: 13px 14px;
+  margin-bottom: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-row--done {
+  background: var(--sage-wash);
+  border-color: var(--sage);
+}
+
+.skill-tile {
+  flex: none;
+  width: 41px;
+  height: 41px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--paper);
+}
+
+.skill-row--done .skill-tile {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: #fff;
+}
+
+.skill-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.skill-row__name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.skill-row__note {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* ---------- 配重计算 ---------- */
+
+.big-input {
+  display: flex;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  padding: 14px;
+  gap: 10px;
+}
+
+.big-input input {
+  flex: 1;
+  text-align: right;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--sage-deep);
+  border: none;
+  background: none;
+  outline: none;
+  font-family: var(--font-mono);
+}
+
+/* ---------- 训练计时器 ---------- */
+
+.timer-big {
+  background: var(--sage-wash);
+  border: 1px solid var(--sage-mid);
+  border-radius: var(--rl);
+  padding: 26px 18px;
+  text-align: center;
+  margin: 16px 0;
+}
+
+.timer-big--work {
+  background: var(--sage);
+  border-color: var(--sage);
+}
+
+.timer-big--work .timer-phase,
+.timer-big--work .timer-clock,
+.timer-big--work .timer-round {
+  color: #fff;
+}
+
+.timer-phase {
+  font-size: 12px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--sage-deep);
+  font-weight: 700;
+}
+
+.timer-clock {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1.05;
+  margin: 6px 0 2px;
+  letter-spacing: -1px;
+  font-family: var(--font-mono);
+}
+
+.timer-round {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.timer-params {
+  transition: opacity 0.2s;
+}
+
+.timer-params--locked {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.timer-set {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.stepper button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--sage-wash);
+  color: var(--sage-deep);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+}
+
+.stepper .stepper__value {
+  min-width: 64px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  border: none;
+  background: none;
+  padding: 4px;
+}
+
+.timer-total {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin: 12px 0;
+}
+
+.timer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.timer-actions .btn {
+  flex: 1;
 }
