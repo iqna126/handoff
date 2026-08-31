@@ -35,16 +35,58 @@ WORKOUT_WITH_CONTENT = {
 
 WORKOUT_EMPTY = {"versionInfo": {}, "data": {"Response": {}}}
 
-PRIMED_BODY = {"screenData": {"variables": {"RequestCache": {"SelectedDate": "2026-01-01"}}}}
+ONE_PROGRAM_SCHEDULE = {
+    "versionInfo": {},
+    "data": {
+        "Response": {"Class": {"List": [{"Id": "1", "Name": "CrossFit", "ProgramId": "101"}]}}
+    },
+}
+NO_CLASSES_SCHEDULE = {"versionInfo": {}, "data": {"Response": {"Class": {"List": []}}}}
+SCHEDULE_TWO_PROGRAMS = {
+    "versionInfo": {},
+    "data": {
+        "Response": {
+            "Class": {
+                "List": [
+                    {"Id": "1", "Name": "CrossFit", "ProgramId": "101"},
+                    {"Id": "2", "Name": "CrossFit Pump & Burn", "ProgramId": "202"},
+                ]
+            }
+        }
+    },
+}
+
+WORKOUT_PRIMED_BODY = {
+    "screenData": {
+        "variables": {
+            "RequestCache": {"SelectedDate": "2026-01-01", "GymProgramId": "0"},
+            "In_Request": {"SelectedDate": "2026-01-01", "GymProgramId": "0"},
+        }
+    }
+}
+SCHEDULE_PRIMED_BODY = {
+    "screenData": {"variables": {"RequestCache": {"SelectedDate": "2026-01-01"}}}
+}
 SESSION = {
     "csrf": "x" * 28,
     "cookie": "nr1W_Theme_UI=aaa",
-    "actions": {"workout": {"body": PRIMED_BODY}},
+    "actions": {
+        "workout": {"body": WORKOUT_PRIMED_BODY},
+        "schedule": {"body": SCHEDULE_PRIMED_BODY},
+    },
 }
 
 
 def _selected_date(body: bytes) -> str:
     return json.loads(body)["screenData"]["variables"]["RequestCache"]["SelectedDate"]
+
+
+def _is_schedule_query(url: str) -> bool:
+    return "Schedule_OS" in url
+
+
+def _program_id(body: bytes) -> str:
+    return json.loads(body)["screenData"]["variables"]["RequestCache"]["GymProgramId"]
 
 
 class TestWeekDates:
@@ -60,20 +102,83 @@ class TestWeekDates:
         ]
 
 
-class TestPullWeek:
-    def test_skips_days_without_content_but_keeps_the_rest(self):
-        queried = []
+class TestPullDay:
+    def test_queries_schedule_before_workout(self):
+        calls = []
 
         def transport(url, headers, body):
+            calls.append("schedule" if _is_schedule_query(url) else "workout")
+            if _is_schedule_query(url):
+                return 200, json.dumps(ONE_PROGRAM_SCHEDULE).encode()
+            return 200, json.dumps(WORKOUT_WITH_CONTENT).encode()
+
+        c = Client("gym.wodify.com", SESSION, transport=transport)
+        sync.pull_day(c, "2026-08-24")
+
+        assert calls == ["schedule", "workout"], "必须先查 schedule 拿到 program 列表，再查 workout"
+
+    def test_queries_workout_once_per_distinct_program(self):
+        program_ids_queried = []
+
+        def transport(url, headers, body):
+            if _is_schedule_query(url):
+                return 200, json.dumps(SCHEDULE_TWO_PROGRAMS).encode()
+            program_ids_queried.append(_program_id(body))
+            payload = dict(WORKOUT_WITH_CONTENT)
+            return 200, json.dumps(payload).encode()
+
+        c = Client("gym.wodify.com", SESSION, transport=transport)
+        rows = sync.pull_day(c, "2026-08-24")
+
+        assert program_ids_queried == ["101", "202"], (
+            "两个不同 program 各查一次 workout，不能只查其中一个——这正是"
+            "缺 GymProgramId 时只拿到一个 program 内容的根因"
+        )
+        assert len(rows) == 2
+
+    def test_no_classes_that_day_returns_empty_without_querying_workout(self):
+        workout_queried = []
+
+        def transport(url, headers, body):
+            if _is_schedule_query(url):
+                return 200, json.dumps(NO_CLASSES_SCHEDULE).encode()
+            workout_queried.append(url)
+            return 200, json.dumps(WORKOUT_WITH_CONTENT).encode()
+
+        c = Client("gym.wodify.com", SESSION, transport=transport)
+        rows = sync.pull_day(c, "2026-08-24")
+
+        assert rows == []
+        assert workout_queried == []
+
+    def test_program_with_empty_workout_is_skipped(self):
+        def transport(url, headers, body):
+            if _is_schedule_query(url):
+                return 200, json.dumps(ONE_PROGRAM_SCHEDULE).encode()
+            return 200, json.dumps(WORKOUT_EMPTY).encode()
+
+        c = Client("gym.wodify.com", SESSION, transport=transport)
+        rows = sync.pull_day(c, "2026-08-24")
+
+        assert rows == []
+
+
+class TestPullWeek:
+    def test_skips_days_without_content_but_keeps_the_rest(self):
+        queried_days = []
+
+        def transport(url, headers, body):
+            if _is_schedule_query(url):
+                return 200, json.dumps(ONE_PROGRAM_SCHEDULE).encode()
             d = _selected_date(body)
-            queried.append(d)
+            queried_days.append(d)
             payload = WORKOUT_WITH_CONTENT if d in ("2026-08-24", "2026-08-30") else WORKOUT_EMPTY
             return 200, json.dumps(payload).encode()
 
         c = Client("gym.wodify.com", SESSION, transport=transport)
         rows = sync.pull_week(c, date(2026, 8, 24))
 
-        assert len(queried) == 7, "非上课日也要照常查询，不能提前跳过"
+        assert len(queried_days) == 7, "非上课日也要照常查询，不能提前跳过"
         assert [r["day"] for r in rows] == ["2026-08-24", "2026-08-30"]
         assert rows[0]["class_type"] == "CrossFit"
 
@@ -148,8 +253,9 @@ class TestRunWeeklySync:
         push_calls = []
 
         def transport(url, headers, body):
-            d = _selected_date(body) if "SelectedDate" in body.decode() else None
-            if d:
+            if _is_schedule_query(url):
+                return 200, json.dumps(ONE_PROGRAM_SCHEDULE).encode()
+            if "SelectedDate" in body.decode():
                 return 200, json.dumps(WORKOUT_WITH_CONTENT).encode()
             push_calls.append(json.loads(body))
             return 200, json.dumps({"written": 7}).encode()
@@ -170,7 +276,7 @@ class TestRunWeeklySync:
         reported = []
 
         def transport(url, headers, body):
-            if "SelectedDate" in body.decode():
+            if _is_schedule_query(url):
                 return 401, b"{}"
             reported.append(json.loads(body))
             return 200, json.dumps({"written": 0}).encode()

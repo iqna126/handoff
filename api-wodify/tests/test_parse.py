@@ -13,6 +13,11 @@ def payload():
     return json.loads((FIXTURES / "workout_response.json").read_text())
 
 
+@pytest.fixture
+def schedule_payload():
+    return json.loads((FIXTURES / "schedule_response.json").read_text())
+
+
 class TestSections:
     def test_section_markers_drive_structure(self, payload):
         r = parse.parse_workout(payload)
@@ -84,6 +89,44 @@ class TestToWodRow:
         row = parse.to_wod_row("2026-08-24", parsed, {})
         assert row["title"] == "WOD 2026-08-24"
         assert row["class_type"] == ""
+
+
+class TestParseSchedule:
+    def test_dedupes_by_program_id(self, schedule_payload):
+        classes = parse.parse_schedule(schedule_payload)
+        assert [c["program_id"] for c in classes] == ["101", "202"], (
+            "同一个 program 当天排了两节课，只应该出现一次——查 workout 只需要每个 program 各查一次"
+        )
+
+    def test_placeholder_record_dropped(self, schedule_payload):
+        classes = parse.parse_schedule(schedule_payload)
+        assert all(c["id"] != "0" for c in classes)
+
+    def test_keeps_id_name_start_time(self, schedule_payload):
+        classes = parse.parse_schedule(schedule_payload)
+        first = classes[0]
+        assert first["id"] == "9001"
+        assert first["name"] == "CrossFit"
+        assert first["start_time"] == "2026-08-24T06:00:00"
+
+    def test_no_crash_on_garbage(self):
+        for junk in (
+            {},
+            {"data": {}},
+            {"data": {"Response": {}}},
+            {"data": None},
+            {"data": {"Response": None}},
+            {"data": {"Response": {"Class": None}}},
+            {"data": {"Response": {"Class": {"List": None}}}},
+        ):
+            assert parse.parse_schedule(junk) == []
+
+    def test_tries_alternate_container_names(self):
+        for key in ("Class", "ClassList", "ScheduleList"):
+            payload = {"data": {"Response": {key: {"List": [{"Id": "1", "ProgramId": "5"}]}}}}
+            assert parse.parse_schedule(payload) == [
+                {"id": "1", "name": None, "start_time": None, "program_id": "5"}
+            ]
 
 
 class TestEmptyBehaviour:

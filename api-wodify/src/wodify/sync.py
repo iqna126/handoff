@@ -27,20 +27,36 @@ def week_dates(start: date) -> list[str]:
     return [(start + timedelta(days=i)).isoformat() for i in range(7)]
 
 
-def pull_week(c: Client, start: date) -> list[dict]:
-    """拉一整周的 WOD，转成 wods 行。
+def pull_day(c: Client, day: str) -> list[dict]:
+    """拉一天的 WOD，转成 wods 行——可能是 0～N 行。
 
-    某天没有排课是正常情况（sections 为空），不算失败，直接跳过不放进结果——
-    不是每天都上课，跳过的是"没有内容"，不是"查询失败"。查询本身失败
-    （SessionExpired/VersionStale）要往上抛，不在这里吞掉。
+    同一天可能同时排着多个 program（比如 CrossFit 和 Pump & Burn），各自的
+    workout 内容完全独立，查 workout 不带 GymProgramId 只会拿到「默认」那个
+    program 的内容（prime 时凑巧点进去的那个）。所以先查 schedule 拿到当天
+    出现过的 program 列表，再对每个 program 各查一次 workout——见
+    DESIGN.md §6.6 根因说明。
+
+    某天没有排课是正常情况，不算失败，直接返回空列表——不是每天都上课。
+    查询本身失败（SessionExpired/VersionStale）要往上抛，不在这里吞掉。
     """
+    schedule_payload = c.query("schedule", date=day)
+    programs = parse.parse_schedule(schedule_payload)
+
     rows = []
-    for day in week_dates(start):
-        payload = c.query("workout", date=day)
+    for program in programs:
+        payload = c.query("workout", date=day, program_id=program["program_id"])
         parsed = parse.parse_workout(payload)
         if not parsed["sections"]:
             continue
         rows.append(parse.to_wod_row(day, parsed, payload))
+    return rows
+
+
+def pull_week(c: Client, start: date) -> list[dict]:
+    """拉一整周的 WOD，转成 wods 行（一天可能产出 0～N 行，见 pull_day）。"""
+    rows = []
+    for day in week_dates(start):
+        rows.extend(pull_day(c, day))
     return rows
 
 

@@ -165,6 +165,52 @@ def _lines_of(description: str, scheme: str, comment: str) -> list[str]:
     return out
 
 
+def parse_schedule(payload: dict) -> list[dict]:
+    """把 GetClassList 的响应转成当天的班级列表，按 ProgramId 去重。
+
+    不同 program（比如 CrossFit 和 Pump & Burn）当天可能同时排课，各自的
+    workout 内容完全独立——见 client.query() 的 program_id 参数、
+    sync.pull_week() 的两步查询。这里只负责把 program 列表摘出来，
+    真正按 program 分别查 workout 是调用方的事。
+
+    响应容器名字见过 Class/ClassList/ScheduleList 几种叫法（同一个动作，
+    不同版本/不同截面返回的外层 key 不一样），三个都试一遍，取第一个有
+    List 的。跟 workout 一样过滤 Id == "0" 的占位记录。
+    """
+    data = payload.get("data") or payload
+    response = data.get("Response") or {}
+
+    container = None
+    for key in ("Class", "ClassList", "ScheduleList"):
+        candidate = response.get(key)
+        if isinstance(candidate, dict) and candidate.get("List"):
+            container = candidate
+            break
+    rows = (container or {}).get("List") or []
+
+    seen_programs: set[str] = set()
+    classes: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict) or not _is_real(row):
+            continue
+        program_id = row.get("ProgramId")
+        if program_id is None:
+            continue
+        program_id = str(program_id)
+        if program_id in seen_programs:
+            continue
+        seen_programs.add(program_id)
+        classes.append(
+            {
+                "id": row.get("Id"),
+                "name": row.get("Name"),
+                "start_time": row.get("StartTime"),
+                "program_id": program_id,
+            }
+        )
+    return classes
+
+
 def to_wod_row(day: str, parsed: dict, raw: dict) -> dict:
     """转成 wods 表的一行。原文永久保留，方便日后用更好的规则重解析。"""
     title = parsed["title"]

@@ -31,20 +31,31 @@ def _load_client() -> Client:
 
 
 def print_workout(c: Client, day: str) -> int:
-    """查一天的 WOD 并打印。返回值是进程退出码。"""
+    """查一天的 WOD 并打印。一天可能有多个 program（比如 CrossFit 和
+    Pump & Burn 同天都排课），各自内容独立，全部打印出来——见
+    sync.pull_day 的同一个根因说明。返回值是进程退出码。
+    """
     try:
-        payload = c.query("workout", date=day)
+        schedule_payload = c.query("schedule", date=day)
+        programs = parse.parse_schedule(schedule_payload)
+        rows = []
+        for program in programs:
+            payload = c.query("workout", date=day, program_id=program["program_id"])
+            parsed = parse.parse_workout(payload)
+            if not parsed["sections"]:
+                continue
+            rows.append(parse.to_wod_row(day, parsed, payload))
     except (SessionExpired, VersionStale, NotPrimed) as e:
         print(str(e), file=sys.stderr)
         return 1
-    parsed = parse.parse_workout(payload)
-    if not parsed["sections"]:
+
+    if not rows:
         print(f"{day} 没有查到内容（可能没有排课，也可能是查询失败——不猜原因）。")
         return 0
-    row = parse.to_wod_row(day, parsed, payload)
-    print(f"{row['class_type']} - {day}：{len(row['sections'])} 个段落")
-    for s in row["sections"]:
-        print(f"  [{s['kind']}] {s['title']}")
+    for row in rows:
+        print(f"{row['class_type']} - {day}：{len(row['sections'])} 个段落")
+        for s in row["sections"]:
+            print(f"  [{s['kind']}] {s['title']}")
     return 0
 
 

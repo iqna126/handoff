@@ -32,12 +32,36 @@ WORKOUT_WITH_CONTENT = {
 }
 WORKOUT_EMPTY = {"versionInfo": {}, "data": {"Response": {}}}
 
-PRIMED_BODY = {"screenData": {"variables": {"RequestCache": {"SelectedDate": "2026-01-01"}}}}
+ONE_PROGRAM_SCHEDULE = {
+    "versionInfo": {},
+    "data": {
+        "Response": {"Class": {"List": [{"Id": "1", "Name": "CrossFit", "ProgramId": "101"}]}}
+    },
+}
+
+WORKOUT_PRIMED_BODY = {
+    "screenData": {
+        "variables": {
+            "RequestCache": {"SelectedDate": "2026-01-01", "GymProgramId": "0"},
+            "In_Request": {"SelectedDate": "2026-01-01", "GymProgramId": "0"},
+        }
+    }
+}
+SCHEDULE_PRIMED_BODY = {
+    "screenData": {"variables": {"RequestCache": {"SelectedDate": "2026-01-01"}}}
+}
 SESSION = {
     "csrf": "x" * 28,
     "cookie": "nr1W_Theme_UI=aaa",
-    "actions": {"workout": {"body": PRIMED_BODY}},
+    "actions": {
+        "workout": {"body": WORKOUT_PRIMED_BODY},
+        "schedule": {"body": SCHEDULE_PRIMED_BODY},
+    },
 }
+
+
+def _is_schedule_query(url: str) -> bool:
+    return "Schedule_OS" in url
 
 
 class TestCmdPrime:
@@ -95,6 +119,8 @@ class TestCmdPrime:
 class TestPrintWorkout:
     def test_prints_sections_on_success(self, capsys):
         def transport(url, headers, body):
+            if _is_schedule_query(url):
+                return 200, json.dumps(ONE_PROGRAM_SCHEDULE).encode()
             return 200, json.dumps(WORKOUT_WITH_CONTENT).encode()
 
         c = Client("gym.wodify.com", SESSION, transport=transport)
@@ -105,8 +131,59 @@ class TestPrintWorkout:
         assert "CrossFit - 2026-08-24" in out
         assert "Back Squat" in out
 
+    def test_prints_every_program_that_day(self, capsys):
+        schedule = {
+            "versionInfo": {},
+            "data": {
+                "Response": {
+                    "Class": {
+                        "List": [
+                            {"Id": "1", "Name": "CrossFit", "ProgramId": "101"},
+                            {"Id": "2", "Name": "Pump & Burn", "ProgramId": "202"},
+                        ]
+                    }
+                }
+            },
+        }
+        pump_and_burn = {
+            "versionInfo": {},
+            "data": {
+                "Response": {
+                    "ResponseWOD": {
+                        "ResponseWorkout": {
+                            "Name": "CrossFit Pump & Burn - Mon, Aug 24",
+                            "WorkoutComponents": {
+                                "List": [
+                                    {"Id": "1", "IsSection": True, "Name": "Warm-Up"},
+                                ]
+                            },
+                        }
+                    }
+                }
+            },
+        }
+
+        def transport(url, headers, body):
+            if _is_schedule_query(url):
+                return 200, json.dumps(schedule).encode()
+            program_id = json.loads(body)["screenData"]["variables"]["RequestCache"]["GymProgramId"]
+            payload = WORKOUT_WITH_CONTENT if program_id == "101" else pump_and_burn
+            return 200, json.dumps(payload).encode()
+
+        c = Client("gym.wodify.com", SESSION, transport=transport)
+        code = cli.print_workout(c, "2026-08-24")
+
+        out = capsys.readouterr().out
+        assert code == 0
+        assert "CrossFit - 2026-08-24" in out
+        assert "CrossFit Pump & Burn - 2026-08-24" in out, (
+            "当天两个 program 都要打印出来，不能只查到其中一个"
+        )
+
     def test_no_content_reports_fact_not_a_guessed_reason(self, capsys):
         def transport(url, headers, body):
+            if _is_schedule_query(url):
+                return 200, json.dumps(ONE_PROGRAM_SCHEDULE).encode()
             return 200, json.dumps(WORKOUT_EMPTY).encode()
 
         c = Client("gym.wodify.com", SESSION, transport=transport)
@@ -132,6 +209,8 @@ class TestPrintWorkout:
 
         def transport(url, headers, body):
             called.append(url)
+            if _is_schedule_query(url):
+                return 200, json.dumps(ONE_PROGRAM_SCHEDULE).encode()
             return 200, json.dumps(WORKOUT_EMPTY).encode()
 
         c = Client("gym.wodify.com", SESSION, transport=transport)
@@ -143,6 +222,8 @@ class TestPrintWorkout:
 class TestRunWeek:
     def test_reports_written_count(self, capsys):
         def transport(url, headers, body):
+            if _is_schedule_query(url):
+                return 200, json.dumps(ONE_PROGRAM_SCHEDULE).encode()
             if "SelectedDate" in body.decode():
                 return 200, json.dumps(WORKOUT_EMPTY).encode()
             return 200, json.dumps({"written": 0}).encode()
@@ -157,7 +238,7 @@ class TestRunWeek:
 
     def test_session_expired_returns_nonzero_without_touching_real_network(self, capsys):
         def transport(url, headers, body):
-            if "SelectedDate" in body.decode():
+            if _is_schedule_query(url):
                 return 401, b"{}"
             return 200, json.dumps({"written": 0}).encode()  # 错误上报那一步
 
