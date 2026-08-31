@@ -173,16 +173,18 @@ def parse_schedule(payload: dict) -> list[dict]:
     sync.pull_week() 的两步查询。这里只负责把 program 列表摘出来，
     真正按 program 分别查 workout 是调用方的事。
 
-    响应容器名字见过 Class/ClassList/ScheduleList 几种叫法（同一个动作，
-    不同版本/不同截面返回的外层 key 不一样），三个都试一遍，取第一个有
-    List 的。跟 workout 一样过滤 Id == "0" 的占位记录。
+    响应容器跟 workout 是同一个命名习惯（``Response.ResponseWOD.ResponseWorkout``）：
+    真机抓包证实是 ``Response.ResponseClassList.Class.List``——外层 key 见过
+    Class/ClassList/ScheduleList 几种叫法（不同版本/不同截面可能不一样），
+    都试一遍，取第一个有 List 的。跟 workout 一样过滤 Id == "0" 的占位记录。
     """
     data = payload.get("data") or payload
     response = data.get("Response") or {}
+    response_class_list = response.get("ResponseClassList") or response
 
     container = None
     for key in ("Class", "ClassList", "ScheduleList"):
-        candidate = response.get(key)
+        candidate = response_class_list.get(key)
         if isinstance(candidate, dict) and candidate.get("List"):
             container = candidate
             break

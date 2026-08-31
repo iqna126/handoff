@@ -27,10 +27,25 @@ PRIMED_BODY = {
     },
 }
 
+# schedule 动作的请求体跟 workout 长得不一样——真机抓包证实它压根没有
+# SelectedDate 这个键，选日期用的是 FromDate（ToDate 是固定哨兵值，不管
+# 查哪天都是这个值，见 client.py 的 _DATE_FIELD_BY_ACTION 说明）
+SCHEDULE_PRIMED_BODY = {
+    "screenData": {
+        "variables": {
+            "RequestCache": {"FromDate": "2026-07-24", "ToDate": "1900-01-01"},
+            "In_Request": {"RequestClassList": {"FromDate": "2026-07-24"}},
+        }
+    }
+}
+
 SESSION = {
     "csrf": "x" * 28,
     "cookie": "nr1W_Theme_UI=aaa; AuthenticationToken=bbb",
-    "actions": {"workout": {"body": PRIMED_BODY}},
+    "actions": {
+        "workout": {"body": PRIMED_BODY},
+        "schedule": {"body": SCHEDULE_PRIMED_BODY},
+    },
 }
 
 
@@ -156,3 +171,48 @@ class TestQuery:
         c = self._client(payload={"versionInfo": {"hasModuleVersionChanged": True}})
         with pytest.raises(client.VersionStale):
             c.query("workout", date="2026-08-25")
+
+
+class TestDateFieldRouting:
+    """schedule 和 workout 的"选日期"字段名字不一样，这是真机测试踩到的真实
+    bug：硬编码统一改 SelectedDate，schedule 请求体里根本没有这个键，
+    直接抛 NotPrimed。见 client.py 的 _DATE_FIELD_BY_ACTION。
+    """
+
+    def _client(self, capture):
+        def transport(url, headers, body):
+            capture["body"] = json.loads(body)
+            return 200, json.dumps({"versionInfo": {}}).encode()
+
+        return client.Client("gym.wodify.com", SESSION, transport=transport)
+
+    def test_schedule_patches_from_date_not_selected_date(self):
+        cap = {}
+        self._client(cap).query("schedule", date="2026-08-25")
+        v = cap["body"]["screenData"]["variables"]
+        assert v["RequestCache"]["FromDate"] == "2026-08-25"
+        assert v["In_Request"]["RequestClassList"]["FromDate"] == "2026-08-25"
+
+    def test_schedule_leaves_to_date_untouched(self):
+        cap = {}
+        self._client(cap).query("schedule", date="2026-08-25")
+        assert cap["body"]["screenData"]["variables"]["RequestCache"]["ToDate"] == "1900-01-01", (
+            "ToDate 是固定哨兵值，跟查哪天无关，不该被改"
+        )
+
+    def test_workout_still_patches_selected_date(self):
+        cap = {}
+        self._client(cap).query("workout", date="2026-08-25")
+        assert (
+            cap["body"]["screenData"]["variables"]["RequestCache"]["SelectedDate"] == "2026-08-25"
+        )
+
+    def test_schedule_without_from_date_field_raises_not_primed(self):
+        broken_session = {
+            "csrf": "c",
+            "cookie": "k",
+            "actions": {"schedule": {"body": {"screenData": {"variables": {}}}}},
+        }
+        c = client.Client("gym.wodify.com", broken_session, transport=lambda *a: (200, b"{}"))
+        with pytest.raises(client.NotPrimed):
+            c.query("schedule", date="2026-08-25")

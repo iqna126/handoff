@@ -35,7 +35,11 @@ WORKOUT_EMPTY = {"versionInfo": {}, "data": {"Response": {}}}
 ONE_PROGRAM_SCHEDULE = {
     "versionInfo": {},
     "data": {
-        "Response": {"Class": {"List": [{"Id": "1", "Name": "CrossFit", "ProgramId": "101"}]}}
+        "Response": {
+            "ResponseClassList": {
+                "Class": {"List": [{"Id": "1", "Name": "CrossFit", "ProgramId": "101"}]}
+            }
+        }
     },
 }
 
@@ -47,9 +51,7 @@ WORKOUT_PRIMED_BODY = {
         }
     }
 }
-SCHEDULE_PRIMED_BODY = {
-    "screenData": {"variables": {"RequestCache": {"SelectedDate": "2026-01-01"}}}
-}
+SCHEDULE_PRIMED_BODY = {"screenData": {"variables": {"RequestCache": {"FromDate": "2026-01-01"}}}}
 SESSION = {
     "csrf": "x" * 28,
     "cookie": "nr1W_Theme_UI=aaa",
@@ -136,11 +138,13 @@ class TestPrintWorkout:
             "versionInfo": {},
             "data": {
                 "Response": {
-                    "Class": {
-                        "List": [
-                            {"Id": "1", "Name": "CrossFit", "ProgramId": "101"},
-                            {"Id": "2", "Name": "Pump & Burn", "ProgramId": "202"},
-                        ]
+                    "ResponseClassList": {
+                        "Class": {
+                            "List": [
+                                {"Id": "1", "Name": "CrossFit", "ProgramId": "101"},
+                                {"Id": "2", "Name": "Pump & Burn", "ProgramId": "202"},
+                            ]
+                        }
                     }
                 }
             },

@@ -91,6 +91,17 @@ def check_fresh(action_name: str, payload: dict) -> None:
         )
 
 
+# 不同动作的"选日期"字段名字不一样——workout 用 SelectedDate，schedule 用
+# FromDate（真机抓包证实：schedule 的请求体压根没有 SelectedDate 这个键，
+# 硬编码统一改 SelectedDate 会导致 schedule 查询直接 NotPrimed）。
+# schedule 的 ToDate 保持原样不动：真机抓到的模板里 ToDate 是个固定哨兵值
+# （"1900-01-01"），跟请求的是哪一天无关，照抄行为，不去猜它该改成什么。
+_DATE_FIELD_BY_ACTION = {
+    "schedule": "FromDate",
+}
+_DEFAULT_DATE_FIELD = "SelectedDate"
+
+
 # --------------------------------------------------------------------------
 # HTTP
 # --------------------------------------------------------------------------
@@ -146,9 +157,10 @@ class Client:
 
         if date is not None:
             if not _is_bare_date(date):
-                raise ValueError(f"SelectedDate 必须是裸的 YYYY-MM-DD，收到 {date!r}")
+                raise ValueError(f"日期必须是裸的 YYYY-MM-DD，收到 {date!r}")
             # 两个平级对象里都有，必须都改
-            require_field(body, "SelectedDate", date)
+            field = _DATE_FIELD_BY_ACTION.get(action_name, _DEFAULT_DATE_FIELD)
+            require_field(body, field, date)
         if program_id is not None:
             require_field(body, "GymProgramId", program_id)
 

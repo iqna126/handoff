@@ -38,19 +38,28 @@ WORKOUT_EMPTY = {"versionInfo": {}, "data": {"Response": {}}}
 ONE_PROGRAM_SCHEDULE = {
     "versionInfo": {},
     "data": {
-        "Response": {"Class": {"List": [{"Id": "1", "Name": "CrossFit", "ProgramId": "101"}]}}
+        "Response": {
+            "ResponseClassList": {
+                "Class": {"List": [{"Id": "1", "Name": "CrossFit", "ProgramId": "101"}]}
+            }
+        }
     },
 }
-NO_CLASSES_SCHEDULE = {"versionInfo": {}, "data": {"Response": {"Class": {"List": []}}}}
+NO_CLASSES_SCHEDULE = {
+    "versionInfo": {},
+    "data": {"Response": {"ResponseClassList": {"Class": {"List": []}}}},
+}
 SCHEDULE_TWO_PROGRAMS = {
     "versionInfo": {},
     "data": {
         "Response": {
-            "Class": {
-                "List": [
-                    {"Id": "1", "Name": "CrossFit", "ProgramId": "101"},
-                    {"Id": "2", "Name": "CrossFit Pump & Burn", "ProgramId": "202"},
-                ]
+            "ResponseClassList": {
+                "Class": {
+                    "List": [
+                        {"Id": "1", "Name": "CrossFit", "ProgramId": "101"},
+                        {"Id": "2", "Name": "CrossFit Pump & Burn", "ProgramId": "202"},
+                    ]
+                }
             }
         }
     },
@@ -64,9 +73,7 @@ WORKOUT_PRIMED_BODY = {
         }
     }
 }
-SCHEDULE_PRIMED_BODY = {
-    "screenData": {"variables": {"RequestCache": {"SelectedDate": "2026-01-01"}}}
-}
+SCHEDULE_PRIMED_BODY = {"screenData": {"variables": {"RequestCache": {"FromDate": "2026-01-01"}}}}
 SESSION = {
     "csrf": "x" * 28,
     "cookie": "nr1W_Theme_UI=aaa",

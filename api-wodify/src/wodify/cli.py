@@ -56,6 +56,11 @@ def print_workout(c: Client, day: str) -> int:
         print(f"{row['class_type']} - {day}：{len(row['sections'])} 个段落")
         for s in row["sections"]:
             print(f"  [{s['kind']}] {s['title']}")
+            # 只打印段落标题看不出实际内容——Wodify 的 IsSection 标记很稀疏，
+            # 一个"段落"底下常常塞了好几个动作/多个难度分级，光看标题数量
+            # 容易误判成"内容缺失"，人工核对必须看到 lines 才有意义
+            for line in s["lines"]:
+                print(f"      {line}")
     return 0
 
 

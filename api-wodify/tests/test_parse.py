@@ -116,14 +116,21 @@ class TestParseSchedule:
             {"data": {"Response": {}}},
             {"data": None},
             {"data": {"Response": None}},
-            {"data": {"Response": {"Class": None}}},
-            {"data": {"Response": {"Class": {"List": None}}}},
+            {"data": {"Response": {"ResponseClassList": None}}},
+            {"data": {"Response": {"ResponseClassList": {"Class": None}}}},
+            {"data": {"Response": {"ResponseClassList": {"Class": {"List": None}}}}},
         ):
             assert parse.parse_schedule(junk) == []
 
     def test_tries_alternate_container_names(self):
         for key in ("Class", "ClassList", "ScheduleList"):
-            payload = {"data": {"Response": {key: {"List": [{"Id": "1", "ProgramId": "5"}]}}}}
+            payload = {
+                "data": {
+                    "Response": {
+                        "ResponseClassList": {key: {"List": [{"Id": "1", "ProgramId": "5"}]}}
+                    }
+                }
+            }
             assert parse.parse_schedule(payload) == [
                 {"id": "1", "name": None, "start_time": None, "program_id": "5"}
             ]

@@ -2,33 +2,35 @@
   "versionInfo": {},
   "data": {
     "Response": {
-      "Class": {
-        "List": [
-          {
-            "Id": "0",
-            "Name": "",
-            "StartTime": "",
-            "ProgramId": ""
-          },
-          {
-            "Id": "9001",
-            "Name": "CrossFit",
-            "StartTime": "2026-08-24T06:00:00",
-            "ProgramId": "101"
-          },
-          {
-            "Id": "9002",
-            "Name": "CrossFit",
-            "StartTime": "2026-08-24T09:00:00",
-            "ProgramId": "101"
-          },
-          {
-            "Id": "9003",
-            "Name": "CrossFit Pump & Burn",
-            "StartTime": "2026-08-24T18:00:00",
-            "ProgramId": "202"
-          }
-        ]
+      "ResponseClassList": {
+        "Class": {
+          "List": [
+            {
+              "Id": "0",
+              "Name": "",
+              "StartTime": "",
+              "ProgramId": ""
+            },
+            {
+              "Id": "9001",
+              "Name": "CrossFit",
+              "StartTime": "2026-08-24T06:00:00",
+              "ProgramId": "101"
+            },
+            {
+              "Id": "9002",
+              "Name": "CrossFit",
+              "StartTime": "2026-08-24T09:00:00",
+              "ProgramId": "101"
+            },
+            {
+              "Id": "9003",
+              "Name": "CrossFit Pump & Burn",
+              "StartTime": "2026-08-24T18:00:00",
+              "ProgramId": "202"
+            }
+          ]
+        }
       }
     }
   }
