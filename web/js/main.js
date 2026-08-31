@@ -1,5 +1,4 @@
-// 入口。目前只做登录/登出这一件事：路由、tab 切换等留到 P0 步骤 5
-// （前端功能全量搭建）再加。
+// 入口：登录态判断 + 登录后把 App 外壳（导航 + 路由）挂起来。
 import { SUPABASE_ANON_KEY } from "./config.js";
 
 async function render() {
@@ -13,17 +12,31 @@ async function render() {
   const auth = await import("./auth.js");
   const loginEl = document.getElementById("login");
   const logoutBtn = document.getElementById("logout-btn");
+  const appEl = document.getElementById("app");
   const emailForm = document.getElementById("email-form");
   const codeForm = document.getElementById("code-form");
 
+  let routerStarted = false;
+
   function paint(session) {
-    statusEl.textContent = session ? `已登录：${session.user.email ?? session.user.id}` : "未登录";
+    statusEl.hidden = !!session;
+    statusEl.textContent = session ? "" : "未登录";
     loginEl.hidden = !!session;
     logoutBtn.hidden = !session;
+    appEl.classList.toggle("app--visible", !!session);
     if (!session) {
       // 退出登录后重新显示邮箱表单，而不是停在验证码那一步
       emailForm.hidden = false;
       codeForm.hidden = true;
+      return;
+    }
+    // 路由只在首次登录成功时初始化一次——多次登录/token 刷新不该重新挂载，
+    // 不然正在看的 tab 内容会被打断重画
+    if (!routerStarted) {
+      routerStarted = true;
+      import("./router.js").then(({ initRouter }) => {
+        initRouter(document.getElementById("nav"), document.getElementById("main"));
+      });
     }
   }
 
