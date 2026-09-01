@@ -1,16 +1,21 @@
 // 训练 tab（SPEC.md §4）。
 //
-// 两条路径都做了：
-// - 主路径（§4.2 简化版）：选日期 → 如果那天 wods 表里有 wodify-pull 同步
-//   的内容，列出当天的 program，选一个把计划内容灌进编辑器，用户在同一个
-//   文本框里自由改重量/组数/写 modification——SPEC 原方案是"选段落→逐段
-//   填写→确认"三步向导式表单，这里简化成"预填 + 自由编辑"，工作量小很多，
-//   但"选 WOD 拿到计划内容、可以自由改"这个核心诉求已经满足
-// - 兜底路径（§4.3）：当天没有同步到内容，或者想快速记点别的，直接手写
+// 两条路径：
+// - 主路径（§4.2）：选日期 → 如果当天 wods 表里有 wodify-pull 同步的内容，
+//   列出当天 program，选一个 → 按段落勾选（默认勾 strength/metcon，热身/
+//   拉伸/附加默认不勾）→ 力量段生成组数表格（计划常驻显示，重量/次数
+//   自己填），metcon 段显示完整计划 + 成绩 + 改动（改动在计划下方，不
+//   替换计划）→ 保存
+// - 兜底路径（§4.3）：没有 WOD 数据，或者想快速记点别的，直接手写
 //
-// 约课提醒（§7）：保存一条"来自 WOD"的记录后询问要不要约下周同一天的课。
-// 上课时间 wods 表现在没有存（wodify-pull 目前没有采集 schedule 的
-// StartTime），按 SPEC 自己写的兜底方案——问用户手动填一次。
+// 跟 SPEC 原方案的两处差异，都是当前数据结构撑不住，不是偷懒：
+// 1. metcon 没有 scaling 档位选择器——wodify-pull 自己的解析器
+//    （api-wodify/src/wodify/parse.py）只按 Wodify 的 IsSection 标记分段，
+//    不像被删除的粘贴解析器那样识别"[Xxx: Levels]"/"Level 2:"这种子块，
+//    所以档位内容都被拉平成普通文本行，没法单独摘出来做选择器。要做的话
+//    得先在 api-wodify 那边把这部分解析出来，是另一块工作量。
+// 2. 约课的具体上课时间需要手填——wodify-pull 目前只拉 workout 内容，
+//    没拉 schedule 动作的 StartTime。
 import {
   addWorkout,
   updateWorkout,
@@ -25,6 +30,7 @@ import { parseBlock, totalVolume } from "../wodtext.js";
 import { muscleProfile } from "../muscles.js";
 import { matchSkills } from "../skillmatch.js";
 import { renderMonthGrid } from "../calendar.js";
+import { cleanLines } from "../htmlclean.js";
 import {
   todayStr,
   formatMonthDay,
@@ -35,23 +41,39 @@ import {
   WEEKDAY_LABELS,
 } from "../dateutils.js";
 
-function wodToText(wod) {
-  const lines = [wod.title || wod.class_type || "WOD"];
-  for (const s of wod.sections || []) {
-    lines.push(`[${s.kind}] ${s.title}`);
-    for (const line of s.lines || []) lines.push(line);
+const DEFAULT_CHECKED_KINDS = new Set(["strength", "metcon"]);
+
+// 力量段：按"Set N: ..."这个模式自动预生成对应组数；识别不到就看 score
+// 里有没有"(N Sets)"，再没有就默认 3 组（SPEC.md §4.2 步骤②）
+function buildSetRows(section) {
+  const lines = cleanLines(section.lines);
+  const setLines = lines.filter((l) => /^Set\s+\d+:/i.test(l));
+  if (setLines.length > 0) {
+    return setLines.map((l) => {
+      const m = l.match(/^Set\s+(\d+):\s*(.*)$/i);
+      return { n: Number(m[1]), plan: m[2].trim(), weight: "", reps: "" };
+    });
   }
-  return lines.join("\n");
+  const scoreMatch = (section.score || "").match(/(\d+)\s*sets?/i);
+  const n = scoreMatch ? Number(scoreMatch[1]) : 3;
+  const planLine = lines.find((l) => l) || section.score || "";
+  return Array.from({ length: n }, (_, i) => ({ n: i + 1, plan: planLine, weight: "", reps: "" }));
+}
+
+function wodTitle(wod) {
+  return wod.class_type || wod.title || "WOD";
 }
 
 export async function render(container) {
   let editingId = null;
-  let sourceWodId = null; // 当前编辑器内容是不是从某个 WOD 导入的
-  let sourceWodDay = null;
   let recordDay = todayStr();
   let pickerMonth = todayStr();
   let pickerOpen = false;
   let records = await listAllWorkouts();
+
+  // WOD 结构化模式的状态：选中某个 program 后才有值
+  let activeWod = null;
+  let sectionStates = null; // Map<sectionId, {checked, rows?, resultText?, modText?, freeText?}>
 
   container.innerHTML = `
     <form class="train-form">
@@ -70,8 +92,13 @@ export async function render(container) {
       </div>
       <div class="train-wod-picker"></div>
       <input type="text" class="train-title" placeholder="标题（可选）" />
-      <textarea class="train-body" rows="6" placeholder="一行一个动作，比如：&#10;Back Squat 100kg 5x5&#10;Row 500m 2min"></textarea>
-      <div class="train-preview"></div>
+
+      <div class="train-manual">
+        <textarea class="train-body" rows="6" placeholder="一行一个动作，比如：&#10;Back Squat 100kg 5x5&#10;Row 500m 2min"></textarea>
+        <div class="train-preview"></div>
+      </div>
+      <div class="train-sections" hidden></div>
+
       <textarea class="train-thoughts" rows="2" placeholder="今天感觉怎么样？有什么想法？（可选）"></textarea>
       <div class="train-actions">
         <button type="button" class="btn ghost" data-cancel hidden>取消编辑</button>
@@ -89,12 +116,16 @@ export async function render(container) {
   const pickerTitle = picker.querySelector(".cal-nav-title");
   const wodPickerEl = container.querySelector(".train-wod-picker");
   const titleInput = container.querySelector(".train-title");
+  const manualEl = container.querySelector(".train-manual");
   const bodyInput = container.querySelector(".train-body");
-  const thoughtsInput = container.querySelector(".train-thoughts");
   const preview = container.querySelector(".train-preview");
+  const sectionsEl = container.querySelector(".train-sections");
+  const thoughtsInput = container.querySelector(".train-thoughts");
   const submitBtn = container.querySelector("[data-submit]");
   const cancelBtn = container.querySelector("[data-cancel]");
   const historyEl = container.querySelector(".train-history");
+
+  // ---------- 日期选择器（跟待办 tab 同一套组件） ----------
 
   function paintDayPicker() {
     dayBtn.textContent = recordDay === todayStr() ? "今天" : formatMonthDay(recordDay);
@@ -106,6 +137,7 @@ export async function render(container) {
         pickerOpen = false;
         picker.hidden = true;
         paintDayPicker();
+        exitWodMode();
         await paintWodPicker();
       },
     });
@@ -131,6 +163,7 @@ export async function render(container) {
     pickerOpen = false;
     picker.hidden = true;
     paintDayPicker();
+    exitWodMode();
     await paintWodPicker();
   });
   document.addEventListener("click", (e) => {
@@ -140,9 +173,8 @@ export async function render(container) {
     }
   });
 
-  // 已同步的 WOD：显示当天所有 program，点一个把计划内容灌进编辑器，
-  // 全文自由编辑——不做 SPEC 原方案那套逐段勾选/逐组填写的向导表单，
-  // 简化成"预填 + 自由改"，核心诉求（能拿到当天 WOD 内容去改）已满足
+  // ---------- WOD 选择 + 按段落勾选（SPEC.md §4.2 步骤①②） ----------
+
   async function paintWodPicker() {
     const wods = await listWodsForDay(recordDay);
     if (wods.length === 0) {
@@ -152,20 +184,154 @@ export async function render(container) {
     wodPickerEl.innerHTML = `
       <p class="entry-row__hint" style="margin-bottom:6px">已从 Wodify 同步：</p>
       <div class="chip-row" style="margin:0">
-        ${wods.map((w) => `<button type="button" class="chip" data-wod="${w.id}">${w.class_type || w.title}</button>`).join("")}
+        ${wods.map((w) => `<button type="button" class="chip" data-wod="${w.id}">${wodTitle(w)}</button>`).join("")}
       </div>
     `;
     wodPickerEl.querySelectorAll("[data-wod]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const wod = wods.find((w) => w.id === btn.dataset.wod);
-        titleInput.value = wod.class_type || wod.title || "";
-        bodyInput.value = wodToText(wod);
-        sourceWodId = wod.id;
-        sourceWodDay = wod.day;
-        paintPreview();
+        enterWodMode(wod);
       });
     });
   }
+
+  function enterWodMode(wod) {
+    activeWod = wod;
+    titleInput.value = wodTitle(wod);
+    sectionStates = new Map();
+    for (const section of wod.sections || []) {
+      const checked = DEFAULT_CHECKED_KINDS.has(section.kind);
+      if (section.kind === "strength") {
+        sectionStates.set(section.id, { checked, rows: buildSetRows(section) });
+      } else if (section.kind === "metcon") {
+        const plan = cleanLines(section.lines).join("\n");
+        sectionStates.set(section.id, { checked, plan, resultText: "", modText: "" });
+      } else {
+        sectionStates.set(section.id, { checked, freeText: cleanLines(section.lines).join("\n") });
+      }
+    }
+    manualEl.hidden = true;
+    sectionsEl.hidden = false;
+    paintSections();
+  }
+
+  function exitWodMode() {
+    activeWod = null;
+    sectionStates = null;
+    manualEl.hidden = false;
+    sectionsEl.hidden = true;
+    titleInput.value = "";
+    bodyInput.value = "";
+    paintPreview();
+  }
+
+  function paintSections() {
+    sectionsEl.innerHTML = `<button type="button" class="linklike" data-back-to-manual style="margin-bottom:10px">‹ 改为手写</button>`;
+    sectionsEl
+      .querySelector("[data-back-to-manual]")
+      .addEventListener("click", exitWodMode);
+
+    for (const section of activeWod.sections || []) {
+      const state = sectionStates.get(section.id);
+      const card = document.createElement("div");
+      card.className = "section-card";
+      card.innerHTML = `
+        <label class="section-card__head">
+          <input type="checkbox" data-section-check="${section.id}" ${state.checked ? "checked" : ""} />
+          <span class="section-card__title">[${section.kind}] ${section.title}</span>
+        </label>
+        <div class="section-card__body" ${state.checked ? "" : "hidden"}></div>
+      `;
+      const body = card.querySelector(".section-card__body");
+      paintSectionBody(body, section, state);
+
+      card.querySelector("[data-section-check]").addEventListener("change", (e) => {
+        state.checked = e.target.checked;
+        body.hidden = !state.checked;
+      });
+
+      sectionsEl.appendChild(card);
+    }
+  }
+
+  function paintSectionBody(body, section, state) {
+    if (section.kind === "strength") {
+      body.innerHTML = `
+        <table class="set-table">
+          <thead><tr><th>组</th><th>计划</th><th>重量</th><th>次数</th></tr></thead>
+          <tbody>
+            ${state.rows
+              .map(
+                (r, i) => `<tr>
+                  <td>${r.n}</td>
+                  <td class="set-table__plan">${r.plan || "—"}</td>
+                  <td><input type="text" inputmode="decimal" class="set-table__input" data-row="${i}" data-field="weight" placeholder="重量" /></td>
+                  <td><input type="text" inputmode="numeric" class="set-table__input" data-row="${i}" data-field="reps" placeholder="次数" /></td>
+                </tr>`,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      `;
+      body.querySelectorAll("[data-row]").forEach((input) => {
+        input.addEventListener("input", () => {
+          state.rows[Number(input.dataset.row)][input.dataset.field] = input.value;
+        });
+      });
+    } else if (section.kind === "metcon") {
+      body.innerHTML = `
+        <div class="metcon-plan">${state.plan.replace(/\n/g, "<br>") || "（没有计划内容）"}</div>
+        <input type="text" class="metcon-result" placeholder="成绩（比如 78 reps / 12:34）" />
+        <textarea class="metcon-mod" rows="2" placeholder="改动（可选，计划本身还是原样保留在上面）"></textarea>
+      `;
+      body.querySelector(".metcon-result").addEventListener("input", (e) => {
+        state.resultText = e.target.value;
+      });
+      body.querySelector(".metcon-mod").addEventListener("input", (e) => {
+        state.modText = e.target.value;
+      });
+    } else {
+      body.innerHTML = `<textarea class="section-freetext" rows="3">${state.freeText}</textarea>`;
+      body.querySelector(".section-freetext").addEventListener("input", (e) => {
+        state.freeText = e.target.value;
+      });
+    }
+  }
+
+  // 把结构化的段落状态拼成最终存的 body 文本 + items——力量段直接拿用户
+  // 填的重量/次数拼成"标准行"喂给 parseLine，复用同一套容量计算，不用
+  // 另外发明一套；metcon/其它段落是自由文本，一起丢进 parseBlock。
+  // 这样"识别到 N 个动作"统计的是用户真的填了数据的那些行，不会把警告/
+  // 计划原文里的每一句话都当成一个"动作"。
+  function composeFromSections() {
+    const lines = [];
+    for (const section of activeWod.sections || []) {
+      const state = sectionStates.get(section.id);
+      if (!state.checked) continue;
+      lines.push(`[${section.kind}] ${section.title}`);
+      if (section.kind === "strength") {
+        for (const r of state.rows) {
+          if (!r.weight && !r.reps) continue;
+          const weightPart = r.weight ? `${r.weight}lb` : "";
+          const repsPart = r.reps ? `1x${r.reps}` : "";
+          // 计划提示跟这一组的实际表现拼在同一行——分开成两行的话，"计划：..."
+          // 那一行也会被 parseBlock 当成单独一个"动作"，把统计吹高
+          const planPart = r.plan ? `（计划：${r.plan}）` : "";
+          lines.push(`${section.title} ${weightPart} ${repsPart} ${planPart}`.trim());
+        }
+      } else if (section.kind === "metcon") {
+        lines.push(state.plan);
+        if (state.modText) lines.push(`改动：${state.modText}`);
+        if (state.resultText) lines.push(`成绩：${state.resultText}`);
+      } else if (state.freeText) {
+        lines.push(state.freeText);
+      }
+      lines.push("");
+    }
+    return lines.join("\n").trim();
+  }
+
+  // ---------- 手写模式的实时解析预览（SPEC.md §4.3） ----------
 
   function paintPreview() {
     const items = parseBlock(bodyInput.value);
@@ -187,22 +353,20 @@ export async function render(container) {
     `;
   }
 
+  // ---------- 表单重置 / 载入历史记录 ----------
+
   function resetForm() {
     editingId = null;
-    sourceWodId = null;
-    sourceWodDay = null;
+    exitWodMode();
     titleInput.value = "";
-    bodyInput.value = "";
     thoughtsInput.value = "";
     submitBtn.textContent = "保存";
     cancelBtn.hidden = true;
-    paintPreview();
   }
 
   function loadIntoForm(record, { asCopy }) {
     editingId = asCopy ? null : record.id;
-    sourceWodId = asCopy ? null : record.wod_id;
-    sourceWodDay = null;
+    exitWodMode();
     recordDay = record.day;
     paintDayPicker();
     titleInput.value = record.title || "";
@@ -228,10 +392,8 @@ export async function render(container) {
   function renderHistoryCard(record) {
     const card = document.createElement("div");
     card.className = "train-card";
-
     const moveNames = (record.items || []).map((it) => it.name).join(" · ");
     const muscles = record.muscles || [];
-
     card.innerHTML = `
       <div class="train-card__head">
         <h3>${record.title || "训练记录"}</h3>
@@ -250,7 +412,6 @@ export async function render(container) {
         <button type="button" class="linklike" data-delete style="color:var(--signal)">删</button>
       </div>
     `;
-
     card.querySelector("[data-copy]").addEventListener("click", () => loadIntoForm(record, { asCopy: true }));
     card.querySelector("[data-edit]").addEventListener("click", () => loadIntoForm(record, { asCopy: false }));
     card.querySelector("[data-delete]").addEventListener("click", async () => {
@@ -259,32 +420,32 @@ export async function render(container) {
       records = await listAllWorkouts();
       await paintHistory();
     });
-
     return card;
   }
 
-  // 约课提醒（SPEC.md §7）：保存一条来自 WOD 的记录后才问，不是每次保存都问
-  async function maybeOfferBooking() {
-    if (!sourceWodId) return;
-    const classDay = sourceWodDay || recordDay;
-    const nextWeekDay = addDays(classDay, 7);
+  // ---------- 约课提醒（SPEC.md §7） ----------
+
+  async function maybeOfferBooking(wodDay) {
+    const nextWeekDay = addDays(wodDay, 7);
     const weekdayLabel = WEEKDAY_LABELS[(parseDateStr(nextWeekDay).getDay() + 6) % 7];
     if (!confirm(`要约下周${weekdayLabel}的课吗？`)) return;
     const time = prompt("几点上课？（比如 5:30 PM——wodify-pull 目前没同步具体时间，需要手填一次）");
     if (!time) return;
     const classType = titleInput.value.trim() || "训练";
-    await addTodo({
-      title: `约 周${weekdayLabel} ${time} 的${classType}`,
-      day: addDays(nextWeekDay, -1),
-    });
+    await addTodo({ title: `约 周${weekdayLabel} ${time} 的${classType}`, day: addDays(nextWeekDay, -1) });
   }
+
+  // ---------- 保存 ----------
 
   bodyInput.addEventListener("input", paintPreview);
   cancelBtn.addEventListener("click", resetForm);
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const bodyText = bodyInput.value.trim();
+
+    const fromWod = activeWod;
+    const wodDay = fromWod ? fromWod.day : null;
+    const bodyText = fromWod ? composeFromSections() : bodyInput.value.trim();
     if (!bodyText) return;
 
     const thoughts = thoughtsInput.value.trim();
@@ -299,13 +460,11 @@ export async function render(container) {
       items,
       volume,
       muscles,
-      wod_id: sourceWodId,
+      wod_id: fromWod ? fromWod.id : null,
     };
 
     const saved = editingId ? await updateWorkout(editingId, payload) : await addWorkout(payload);
 
-    // 保存后扫描一遍，自动解锁认出来的动作（SPEC.md §6.3）——只对"当前
-    // 还没解锁"的动作调用，不覆盖已有的手动解锁记录
     const unlocked = new Set((await listUnlockedSkills()).map((s) => s.movement_key));
     const hits = matchSkills(body).filter((h) => !unlocked.has(h.key));
     for (const hit of hits) {
@@ -313,11 +472,10 @@ export async function render(container) {
     }
 
     records = await listAllWorkouts();
-    const hadSourceWod = !!sourceWodId;
     resetForm();
     await paintHistory();
     if (hits.length > 0) alert(`已保存，自动解锁了 ${hits.length} 个动作`);
-    if (hadSourceWod) await maybeOfferBooking();
+    if (fromWod) await maybeOfferBooking(wodDay);
   });
 
   paintDayPicker();

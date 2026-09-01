@@ -1148,6 +1148,105 @@ button.linklike {
   resize: vertical;
 }
 
+/* ---------- WOD 导入：按段落勾选 ---------- */
+
+.train-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--rl);
+  padding: 12px 14px;
+}
+
+.section-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.section-card__head input {
+  accent-color: var(--sage);
+  width: 18px;
+  height: 18px;
+}
+
+.section-card__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.section-card__body {
+  margin-top: 10px;
+}
+
+.set-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.set-table th {
+  text-align: left;
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-weight: 600;
+  padding-bottom: 6px;
+}
+
+.set-table td {
+  padding: 4px 4px 4px 0;
+  vertical-align: top;
+}
+
+.set-table__plan {
+  color: var(--ink-soft);
+}
+
+.set-table__input {
+  width: 56px;
+  padding: 5px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  font-size: 13px;
+}
+
+.metcon-plan {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.7;
+  background: var(--sage-wash);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.metcon-result,
+.metcon-mod {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--paper);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.section-freetext {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--paper);
+  font-size: 13px;
+}
+
 .train-preview {
   background: var(--sage-wash);
   border-radius: var(--r);
