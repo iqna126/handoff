@@ -1,0 +1,42 @@
+{
+  "versionInfo": {"hasModuleVersionChanged": false, "hasApiVersionChanged": false},
+  "data": {
+    "Response": {
+      "ResponseWOD": {
+        "ResponseWorkout": {
+          "Id": "9002",
+          "Name": "CrossFit Pump & Burn - Mon, Aug 31",
+          "WorkoutComponents": {
+            "List": [
+              {
+                "Id": "1", "IsSection": true,
+                "IsWarmup": false, "IsGymnastics": false, "IsWeightlifting": false, "IsMetcon": false,
+                "Name": "Warm-Up:",
+                "Comment": "2 Rounds: 1:00 Cardio Choice", "Description": "", "MeasureRepScheme": ""
+              },
+              {
+                "Id": "2", "IsSection": false,
+                "IsWarmup": false, "IsGymnastics": false, "IsWeightlifting": true, "IsMetcon": false,
+                "Name": "Romanian Deadlift (RDL)",
+                "Description": "", "MeasureRepScheme": "For Load: 4 Sets @ 55-60%",
+                "Comment": "Goal is an RPE 8 load"
+              },
+              {
+                "Id": "3", "IsSection": false,
+                "IsWarmup": false, "IsGymnastics": false, "IsWeightlifting": false, "IsMetcon": true,
+                "Name": "Strength EMOM",
+                "Description": "12:00 EMOM", "MeasureRepScheme": "", "Comment": ""
+              },
+              {
+                "Id": "4", "IsSection": true,
+                "IsWarmup": false, "IsGymnastics": false, "IsWeightlifting": false, "IsMetcon": false,
+                "Name": "Cool-Down",
+                "Comment": "Stretch", "Description": "", "MeasureRepScheme": ""
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

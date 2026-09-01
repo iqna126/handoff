@@ -18,6 +18,11 @@ def schedule_payload():
     return json.loads((FIXTURES / "schedule_response.json").read_text())
 
 
+@pytest.fixture
+def flagged_payload():
+    return json.loads((FIXTURES / "workout_response_with_flags.json").read_text())
+
+
 class TestSections:
     def test_section_markers_drive_structure(self, payload):
         r = parse.parse_workout(payload)
@@ -31,6 +36,43 @@ class TestSections:
 
     def test_title_carried(self, payload):
         assert parse.parse_workout(payload)["title"] == "CrossFit - Mon, Aug 24"
+
+
+class TestComponentTypeFlags:
+    """真机抓包证实每个组件自己带 IsWarmup/IsGymnastics/IsWeightlifting/
+    IsMetcon 标记（Wodify 官方 App 显然是靠这些区分展示的）。之前只认
+    IsSection，同一个 IsSection 标记下面混着的不同类型内容（比如
+    "Warm-Up:" 段落里紧跟着一个 IsWeightlifting=true 的真实力量组件）会
+    被囫囵折成一段——这是真机测试暴露、用真实数据核实过的问题。
+    """
+
+    def test_flagged_component_splits_into_its_own_section(self, flagged_payload):
+        r = parse.parse_workout(flagged_payload)
+        titles = [s["title"] for s in r["sections"]]
+        assert titles == ["Warm-Up:", "Romanian Deadlift (RDL)", "Strength EMOM", "Cool-Down"], (
+            "IsWeightlifting/IsMetcon 组件要各自另开段落，不能跟前面的 Warm-Up 混在一起"
+        )
+
+    def test_split_sections_get_the_right_kind(self, flagged_payload):
+        r = parse.parse_workout(flagged_payload)
+        kinds = {s["title"]: s["kind"] for s in r["sections"]}
+        assert kinds["Warm-Up:"] == "warmup"
+        assert kinds["Romanian Deadlift (RDL)"] == "strength"
+        assert kinds["Strength EMOM"] == "metcon"
+        assert kinds["Cool-Down"] == "cooldown"
+
+    def test_warmup_section_does_not_swallow_the_real_strength_content(self, flagged_payload):
+        r = parse.parse_workout(flagged_payload)
+        warmup = next(s for s in r["sections"] if s["title"] == "Warm-Up:")
+        blob = "\n".join(warmup["lines"])
+        assert "Romanian Deadlift" not in blob, "力量内容被错误地折进了热身段落"
+
+    def test_strength_section_keeps_its_own_content(self, flagged_payload):
+        r = parse.parse_workout(flagged_payload)
+        strength = next(s for s in r["sections"] if s["title"] == "Romanian Deadlift (RDL)")
+        blob = "\n".join(strength["lines"])
+        assert "4 Sets @ 55-60%" in blob
+        assert "RPE 8" in blob
 
 
 class TestScalingLevels:

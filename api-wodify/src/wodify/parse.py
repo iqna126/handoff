@@ -67,7 +67,7 @@ def _is_real(record: dict) -> bool:
     return rid is None or str(rid) != EMPTY_ID
 
 
-def _classify(title: str, scheme: str) -> str:
+def _classify(title: str, scheme: str, flag_kind: str | None = None) -> str:
     t = (title or "").strip()
     if _TITLE_WARMUP.match(t):
         return "warmup"
@@ -80,7 +80,34 @@ def _classify(title: str, scheme: str) -> str:
         return "metcon"
     if _LIFT_WORDS.search(t):
         return "strength"
+    # 标题本身给不出信号时（最常见：接续上一个组件、没有自己名字的空标题
+    # 组件），优先信 Wodify 自己打的类型标记，而不是直接落到下面写死的
+    # "metcon" 默认值——见 _kind_from_flags 的说明。
+    if flag_kind is not None:
+        return flag_kind
     return "metcon"
+
+
+def _kind_from_flags(comp: dict) -> str | None:
+    """Wodify 给每个组件自己打的内容类型标记：IsWarmup/IsGymnastics/
+    IsWeightlifting/IsMetcon。真机抓包证实这些字段确实存在，且它们自己的
+    App 显然是靠这些区分展示的——不是只有 IsSection 一种分段信号。
+
+    用来判断"这个组件要不要单独另开一个段落"：同一个 IsSection 标记
+    （比如"Warm-Up:"）后面经常紧跟着真正的力量训练组件（比如
+    IsWeightlifting=true 的"Romanian Deadlift (RDL)"），靠标题瞎猜会把
+    它当成热身内容的一部分折起来——这是真机测试中被指出、又用真实数据
+    核实过的问题，标题关键词判断不出来，只有这个标记能看出来。
+    """
+    if comp.get("IsWeightlifting"):
+        return "strength"
+    if comp.get("IsMetcon"):
+        return "metcon"
+    if comp.get("IsGymnastics"):
+        return "strength"
+    if comp.get("IsWarmup"):
+        return "warmup"
+    return None
 
 
 def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
@@ -130,7 +157,7 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
         if is_section:
             cur = {
                 "id": f"s{len(sections) + 1}",
-                "kind": _classify(name, scheme),
+                "kind": _classify(name, scheme, _kind_from_flags(comp)),
                 "title": name,
                 "score": scheme,
                 "lines": [],
@@ -148,13 +175,16 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
             cur["lines"].extend(_lines_of(description, scheme, comment))
             continue
 
-        # 不是段落标记 → 归入当前段落；没有当前段落就开一个。
-        # 这个分支只会在还没遇到任何段落标记时触发（一旦 cur 被设过就不会再变回
-        # None），所以这里没有"继承上一个段落的 kind"这回事可言，直接归类
-        if cur is None:
+        # 不是段落标记——但如果这个组件自己的类型标记跟当前段落的 kind
+        # 对不上（比如当前在"warmup"段落里，这个组件却是
+        # IsWeightlifting=true），说明它是被塞进同一个 IsSection 标记下面
+        # 的另一类真实内容，得单独另开一个段落，不能囫囵折进当前段落里
+        # （见 _kind_from_flags 的说明，这是真机数据证实过的真实问题）。
+        flag_kind = _kind_from_flags(comp)
+        if cur is None or (flag_kind is not None and flag_kind != cur["kind"]):
             cur = {
                 "id": f"s{len(sections) + 1}",
-                "kind": _classify(name, scheme),
+                "kind": _classify(name, scheme, flag_kind),
                 "title": name,
                 "score": scheme,
                 "lines": [],
@@ -163,11 +193,10 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
                 "levels": [],
             }
             sections.append(cur)
-            body_lines = _lines_of(description, scheme, comment)
-            cur["lines"].extend(body_lines)
+            cur["lines"].extend(_lines_of(description, scheme, comment))
             continue
 
-        # 组件名单独成行，随后是它的内容
+        # 归入当前段落：组件名单独成行，随后是它的内容
         if name and name != cur["title"]:
             cur["lines"].append(name)
         cur["lines"].extend(_lines_of(description, scheme, comment))
