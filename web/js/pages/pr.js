@@ -5,7 +5,7 @@
 // 它依赖训练记录里能解析出结构化的动作+重量，而训练记录编辑器/自动同步
 // 三步流程这两条路径都还没做，扫描无源可扫，等那部分做完再回来接上。
 import { listPRs, upsertPR, deletePR, getUnitPref, setUnitPref } from "../data.js";
-import { toDisplay, fromDisplay, kgToLb, roundToPlates, getSavedBar } from "../units.js";
+import { toDisplay, fromDisplay, formatWeight, kgToLb, roundToPlates, getSavedBar } from "../units.js";
 
 const PCTS = [50, 60, 70, 75, 80, 85, 90, 95, 100, 105];
 
@@ -97,7 +97,7 @@ export async function render(container) {
         const { rounded } = roundToPlates(targetInUnit, unit, bar);
         return `<button type="button" class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}" data-pct="${pct}">
           <div class="pct-cell__pct">${pct}%</div>
-          <div class="pct-cell__val">${Math.round(rounded)}</div>
+          <div class="pct-cell__val">${formatWeight(rounded)}</div>
         </button>`;
       }).join("");
       pctGrid.querySelectorAll("[data-pct]").forEach((btn) => {
@@ -119,7 +119,7 @@ export async function render(container) {
       const targetInUnit = unit === "kg" ? kg : kgToLb(kg);
       const { rounded, perSide } = roundToPlates(targetInUnit, unit, bar);
       const sides = perSide.length ? perSide.join(" + ") : "无（低于杆重）";
-      breakdown.textContent = `${expanded}%：${Math.round(rounded)}${unit} ＝ 杆 ${bar}${unit} ＋ 每边 ${sides}`;
+      breakdown.textContent = `${expanded}%：${formatWeight(rounded)}${unit} ＝ 杆 ${bar}${unit} ＋ 每边 ${sides}`;
     }
 
     input.addEventListener("input", paintPcts);

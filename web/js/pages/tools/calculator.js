@@ -10,6 +10,7 @@ import { listPRs, getUnitPref, setUnitPref } from "../../data.js";
 import {
   toDisplay,
   fromDisplay,
+  formatWeight,
   kgToLb,
   roundToPlates,
   getSavedBar,
@@ -97,7 +98,7 @@ export async function render(container, seed = {}) {
       const { rounded } = roundToPlates(targetInUnit(pct), unit, bar);
       return `<button type="button" class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}" data-pct="${pct}">
         <div class="pct-cell__pct">${pct}%</div>
-        <div class="pct-cell__val">${Math.round(rounded)}</div>
+        <div class="pct-cell__val">${formatWeight(rounded)}</div>
       </button>`;
     }).join("");
 
@@ -118,7 +119,7 @@ export async function render(container, seed = {}) {
     }
     const { rounded, perSide } = roundToPlates(targetInUnit(expanded), unit, bar);
     const sides = perSide.length ? perSide.join(" + ") : "无（低于杆重）";
-    breakdown.textContent = `${expanded}%：${Math.round(rounded)}${unit} ＝ 杆 ${bar}${unit} ＋ 每边 ${sides}`;
+    breakdown.textContent = `${expanded}%：${formatWeight(rounded)}${unit} ＝ 杆 ${bar}${unit} ＋ 每边 ${sides}`;
   }
 
   unitBtn.addEventListener("click", async () => {
