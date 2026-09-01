@@ -75,9 +75,21 @@ input {
   gap: 12px;
 }
 
+/* 上面这条 display:flex 的优先级会盖过浏览器给 [hidden] 元素的默认
+   display:none——单靠 JS 设 loginEl.hidden = true 不会真的隐藏，登录框会
+   跟已登录后的正文一起显示。必须显式声明 [hidden] 的情况优先。 */
+#login[hidden] {
+  display: none;
+}
+
 #login form {
   display: flex;
   gap: 8px;
+}
+
+/* 同一个问题——email-form/code-form 互相切换显隐用的也是 hidden 属性 */
+#login form[hidden] {
+  display: none;
 }
 
 #login input {
