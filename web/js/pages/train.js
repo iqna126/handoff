@@ -2,20 +2,17 @@
 //
 // 两条路径：
 // - 主路径（§4.2）：选日期 → 如果当天 wods 表里有 wodify-pull 同步的内容，
-//   列出当天 program，选一个 → 按段落勾选（默认勾 strength/metcon，热身/
-//   拉伸/附加默认不勾）→ 力量段生成组数表格（计划常驻显示，重量/次数
-//   自己填），metcon 段显示完整计划 + 成绩 + 改动（改动在计划下方，不
-//   替换计划）→ 保存
+//   列出当天 program，选一个 → 按段落勾选 → 力量段生成组数表格（计划常驻
+//   显示，重量/次数自己填），metcon 段有 scaling 档位就给选择器，没有就
+//   显示整段计划 + 成绩 + 改动（改动在计划下方，不替换计划）→ 保存
 // - 兜底路径（§4.3）：没有 WOD 数据，或者想快速记点别的，直接手写
 //
-// 跟 SPEC 原方案的两处差异，都是当前数据结构撑不住，不是偷懒：
-// 1. metcon 没有 scaling 档位选择器——wodify-pull 自己的解析器
-//    （api-wodify/src/wodify/parse.py）只按 Wodify 的 IsSection 标记分段，
-//    不像被删除的粘贴解析器那样识别"[Xxx: Levels]"/"Level 2:"这种子块，
-//    所以档位内容都被拉平成普通文本行，没法单独摘出来做选择器。要做的话
-//    得先在 api-wodify 那边把这部分解析出来，是另一块工作量。
-// 2. 约课的具体上课时间需要手填——wodify-pull 目前只拉 workout 内容，
-//    没拉 schedule 动作的 StartTime。
+// 段落默认全勾（不是 SPEC 原方案"默认只勾 strength/metcon"那样区别对待）：
+// Wodify 有些天只标了两三个 IsSection 组件，中间真正的力量/metcon 内容会
+// 被折进离它最近的那个 warmup/cooldown 段落里（kind 分类是按段落自己的
+// 标题判的，跟里面实际塞了什么内容无关）——默认隐藏"非重点"段落等于默认
+// 藏起来一部分真实训练内容，还得用户知道去手动勾开。全部默认勾选、让
+// 用户自己去掉不想记的，比自作主张猜"这段重要不重要"更不容易漏内容。
 import {
   addWorkout,
   updateWorkout,
@@ -40,8 +37,6 @@ import {
   parseDateStr,
   WEEKDAY_LABELS,
 } from "../dateutils.js";
-
-const DEFAULT_CHECKED_KINDS = new Set(["strength", "metcon"]);
 
 // 力量段：按"Set N: ..."这个模式自动预生成对应组数；识别不到就看 score
 // 里有没有"(N Sets)"，再没有就默认 3 组（SPEC.md §4.2 步骤②）
@@ -211,7 +206,7 @@ export async function render(container) {
     titleInput.value = wodTitle(wod);
     sectionStates = new Map();
     for (const section of wod.sections || []) {
-      const checked = DEFAULT_CHECKED_KINDS.has(section.kind);
+      const checked = true; // 全部默认勾选，见模块顶部说明
       if (section.kind === "strength") {
         sectionStates.set(section.id, { checked, rows: buildSetRows(section) });
       } else if (section.kind === "metcon") {
@@ -278,7 +273,7 @@ export async function render(container) {
       card.innerHTML = `
         <label class="section-card__head">
           <input type="checkbox" data-section-check="${section.id}" ${state.checked ? "checked" : ""} />
-          <span class="section-card__title">[${section.kind}] ${section.title}</span>
+          <span class="section-card__title">${section.title}</span>
         </label>
         <div class="section-card__body" ${state.checked ? "" : "hidden"}></div>
       `;
@@ -370,7 +365,7 @@ export async function render(container) {
     for (const section of activeWod.sections || []) {
       const state = sectionStates.get(section.id);
       if (!state.checked) continue;
-      lines.push(`[${section.kind}] ${section.title}`);
+      lines.push(section.title);
       if (section.kind === "strength") {
         for (const r of state.rows) {
           if (!r.weight && !r.reps) continue;

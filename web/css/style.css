@@ -193,6 +193,12 @@ button.linklike {
   font-weight: 600;
   cursor: pointer;
   padding: 0;
+  text-align: left;
+  /* 浏览器默认给 <button> 的内容居中；这个按钮经常是 flex column 里唯一
+     一个没有别的东西撑开宽度的子元素，被拉伸铺满整行后文字就跑到正中间
+     去了（"‹ 改为手写"那个链接看着很怪的原因）。不参与拉伸，靠内容本身
+     宽度就行。 */
+  align-self: flex-start;
 }
 
 /* ---------- 日历 ---------- */
@@ -1117,6 +1123,12 @@ button.linklike {
 }
 
 .train-body {
+  /* 这个 textarea 现在包在 .train-manual 里，不再是 .train-form 那个
+     flex column 的直接子元素，拿不到 flex 的 stretch 效果了——不写死
+     width:100% 的话，textarea 会按它的默认 cols=20 属性算一个窄得多的
+     宽度，跟上面的标题输入框对不齐（"手写输入框跟标题不一样宽"的原因）。 */
+  width: 100%;
+  box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid var(--rule);
   border-radius: var(--r);
@@ -1154,6 +1166,13 @@ button.linklike {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* 跟 #login 同一个坑：上面这条 display:flex 的优先级会盖过浏览器给
+   [hidden] 元素的默认 display:none，光设 sectionsEl.hidden = true 不会
+   真的隐藏——退出 WOD 模式时旧的段落卡片会跟手写编辑器一起卡在页面上。 */
+.train-sections[hidden] {
+  display: none;
 }
 
 .section-card {
