@@ -1,13 +1,16 @@
 // 配重计算（SPEC.md §8.2）：输入 1RM → 各百分比重量，直接算，四舍五入保留
 // 两位小数——不做配片取整（用户明确要求去掉，杆重只是让人"大概心里有数"，
-// 不需要精确到能不能配出来）。可从 PR 墙一键带入。KG/LB 用全局单位设置
-// （不是这个页面自己单独存一份——切换要跟 PR 墙保持一致）。
+// 不需要精确到能不能配出来）。可从 PR 墙一键带入。
+//
+// 打开时用全局默认单位（我的 → 设置）起手，但这里的 LB/KG 按钮只是"临时
+// 换算看一眼"，点了不会改掉全局默认——用户明确反馈过，在这里点一下 KG
+// 结果把设置里的默认单位也改掉了，很意外。只有设置页自己才能改默认单位。
 //
 // 单位换算的核心不变量（SPEC.md §0.2）：内部只认 kgValue 这一个全精度的
 // 数，input 框里的字符串只是它的显示形态。切换单位绝不能拿"界面上已经
 // 四舍五入过的字符串"反推——那样滑动几次单位就会跟原始输入对不上
 // （125.25 lb 会飘到 125.24 lb 这种），必须全程从 kgValue 重新格式化。
-import { listPRs, getUnitPref, setUnitPref } from "../../data.js";
+import { listPRs, getUnitPref } from "../../data.js";
 import { toDisplay, fromDisplay, formatWeight, kgToLb } from "../../units.js";
 
 const PCTS = [50, 60, 70, 75, 80, 85, 90, 95, 100, 105];
@@ -77,13 +80,11 @@ export async function render(container, seed = {}) {
     }).join("");
   }
 
-  unitBtn.addEventListener("click", async () => {
+  unitBtn.addEventListener("click", () => {
     const newUnit = unit === "kg" ? "lb" : "kg";
-    await setUnitPref(newUnit).catch(() => {});
-    // kgValue 本身不用换算——它一直是 kg，只是显示格式跟着单位变。
-    // PR 显示的数字也要跟着单位变，重新渲染一整页更省事可靠。
-    // render() 是 async 的，这里没有 await 它（不阻塞点击），所以必须显式
-    // 兜住失败，不然网络抖动时会变成没人处理的 promise rejection。
+    // 只换算当前这次看的显示单位，不碰全局默认设置。kgValue 本身不用
+    // 换算——它一直是 kg，只是显示格式跟着单位变；PR 显示的数字也要跟着
+    // 单位变，重新渲染一整页更省事可靠。
     render(container, { unit: newUnit, kgValue }).catch((err) => {
       container.innerHTML = `<p class="error-hint">切换失败：${err.message}</p>`;
     });

@@ -258,6 +258,13 @@ export function render(container) {
   startBtn.addEventListener("click", toggle);
   container.querySelector("[data-reset]").addEventListener("click", reset);
 
+  // 切到后台（切 App、锁屏、接电话）等于自动暂停——不能让计时器在用户
+  // 看不见的时候自己往下跑，回来发现好几轮已经"跑完"了。endAt 时间戳
+  // 本身没有漂移问题，这里纯粹是产品行为选择：不可见就当暂停处理。
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && TM.running) toggle();
+  });
+
   renderClock();
   renderParams();
 }

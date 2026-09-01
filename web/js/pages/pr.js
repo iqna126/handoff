@@ -1,11 +1,14 @@
 // PR 墙（SPEC.md §5）：14 个项目，1RM 输入 + 百分比重量表（直接算，四舍
-// 五入保留两位小数——不做配片取整，用户明确要求去掉），KG/LB 用全局单位
-// 设置。
+// 五入保留两位小数——不做配片取整，用户明确要求去掉）。
+//
+// 打开时用全局默认单位（我的 → 设置）起手，但页面上的 LB/KG 按钮只是
+// "临时换算看一眼"，点了不改全局默认——用户明确反馈过，在这点一下 KG
+// 会把设置里的默认单位也带着改掉，很意外。只有设置页自己才能改默认单位。
 //
 // 老版单文件 App 里有一个"从训练记录扫描 PR"的功能（§5.1），这里先不做——
 // 它依赖训练记录里能解析出结构化的动作+重量，而训练记录编辑器/自动同步
 // 三步流程这两条路径都还没做，扫描无源可扫，等那部分做完再回来接上。
-import { listPRs, upsertPR, deletePR, getUnitPref, setUnitPref } from "../data.js";
+import { listPRs, upsertPR, deletePR, getUnitPref } from "../data.js";
 import { toDisplay, fromDisplay, formatWeight, kgToLb } from "../units.js";
 import { showConfirm, showAlert } from "../dialog.js";
 
@@ -50,9 +53,8 @@ export async function render(container) {
         paintDetail();
       });
     });
-    container.querySelector("[data-unit-toggle]").addEventListener("click", async () => {
+    container.querySelector("[data-unit-toggle]").addEventListener("click", () => {
       unit = unit === "kg" ? "lb" : "kg";
-      await setUnitPref(unit).catch(() => {});
       paintList();
     });
   }

@@ -108,20 +108,20 @@ export async function listAllWorkouts() {
   return data;
 }
 
-export async function addWorkout({ day, title, body, items, volume, muscles, wod_id }) {
+export async function addWorkout({ day, title, body, items, volume, muscles, wod_id, wod_state }) {
   const { data, error } = await supabase
     .from("workouts")
-    .insert({ day, title, body, items, volume, muscles, wod_id: wod_id || null })
+    .insert({ day, title, body, items, volume, muscles, wod_id: wod_id || null, wod_state: wod_state || null })
     .select()
     .single();
   if (error) throw error;
   return data;
 }
 
-export async function updateWorkout(id, { day, title, body, items, volume, muscles, wod_id }) {
+export async function updateWorkout(id, { day, title, body, items, volume, muscles, wod_id, wod_state }) {
   const { data, error } = await supabase
     .from("workouts")
-    .update({ day, title, body, items, volume, muscles, wod_id: wod_id || null })
+    .update({ day, title, body, items, volume, muscles, wod_id: wod_id || null, wod_state: wod_state || null })
     .eq("id", id)
     .select()
     .single();

@@ -115,20 +115,29 @@ export async function render(container) {
     return row;
   }
 
+  // 心愿单入口之前完全没有说明，没解锁过的用户根本不知道 ♡ 是干嘛的——
+  // 空的时候也要把这个盒子画出来，用一句话交代清楚怎么用
   function paintWishSection() {
     const items = catalog.SKILLS.filter((s) => wished.has(s.k) && !unlocked.has(s.k));
     wishSection.innerHTML = "";
-    if (items.length === 0) return;
     const box = document.createElement("div");
     box.className = "wish-box";
     const title = document.createElement("h2");
     title.style.margin = "0 0 4px";
-    title.textContent = `心愿单 · 还差 ${items.length} 个`;
+    title.textContent = items.length > 0 ? `心愿单 · 还差 ${items.length} 个` : "心愿单";
     box.appendChild(title);
-    for (const s of items) {
-      const row = skillRow(s, { showHeart: true });
-      row.classList.add("wish-row");
-      box.appendChild(row);
+    if (items.length === 0) {
+      const hint = document.createElement("p");
+      hint.className = "empty-hint";
+      hint.style.padding = "6px 0";
+      hint.textContent = "点动作右边的 ♡ 收藏想解锁的动作，会列在这里";
+      box.appendChild(hint);
+    } else {
+      for (const s of items) {
+        const row = skillRow(s, { showHeart: true });
+        row.classList.add("wish-row");
+        box.appendChild(row);
+      }
     }
     wishSection.appendChild(box);
   }

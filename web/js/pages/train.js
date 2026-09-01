@@ -198,12 +198,21 @@ export async function render(container) {
     });
   }
 
-  function enterWodMode(wod) {
+  // restore：改一条之前存过的 WOD 记录时，把上次每个段落勾选/填的重量
+  // 次数/档位/成绩原样摆回去，而不是退回一片空白的默认状态（见
+  // loadIntoForm 里的说明）。restore.sections 里按 section.id 找不到的
+  // （比如那天的 WOD 内容后来变了）照常用默认值兜底。
+  function enterWodMode(wod, restore) {
     activeWod = wod;
-    selectedClassTime = (wod.class_times || [])[0] || null;
-    titleInput.value = wodTitle(wod);
+    selectedClassTime = restore?.classTime ?? ((wod.class_times || [])[0] || null);
+    titleInput.value = restore?.title || wodTitle(wod);
     sectionStates = new Map();
     for (const section of wod.sections || []) {
+      const saved = restore?.sections?.find((s) => s.id === section.id);
+      if (saved) {
+        sectionStates.set(section.id, { ...saved });
+        continue;
+      }
       const checked = true; // 全部默认勾选，见模块顶部说明
       if (section.kind === "strength") {
         sectionStates.set(section.id, { checked, rows: buildSetRows(section) });
@@ -243,17 +252,24 @@ export async function render(container) {
 
     const times = activeWod.class_times || [];
     if (times.length > 0) {
+      // 时间标签跟 chip 放同一个 flex 行里挤过：中文没有天然断词点，
+      // flex 收缩会把它挤成一字一行的竖条，chip 本身也被连带撑大——
+      // 标签必须单独占一行，不能跟 chip-row 共享 flex 容器
+      const label = document.createElement("p");
+      label.className = "entry-row__hint";
+      label.style.margin = "0 0 6px";
+      label.textContent = "这节课的时间：";
+      sectionsEl.appendChild(label);
+
       const timeRow = document.createElement("div");
       timeRow.className = "chip-row";
       timeRow.style.margin = "0 0 12px";
-      timeRow.innerHTML =
-        `<span class="entry-row__hint" style="margin-right:4px">这节课的时间：</span>` +
-        times
-          .map(
-            (t, i) =>
-              `<button type="button" class="chip ${t === selectedClassTime ? "chip--active" : ""}" data-time="${i}">${formatTimeOfDay(t)}</button>`,
-          )
-          .join("");
+      timeRow.innerHTML = times
+        .map(
+          (t, i) =>
+            `<button type="button" class="chip ${t === selectedClassTime ? "chip--active" : ""}" data-time="${i}">${formatTimeOfDay(t)}</button>`,
+        )
+        .join("");
       timeRow.querySelectorAll("[data-time]").forEach((btn) => {
         btn.addEventListener("click", () => {
           selectedClassTime = times[Number(btn.dataset.time)];
@@ -297,8 +313,8 @@ export async function render(container) {
                 (r, i) => `<tr>
                   <td>${r.n}</td>
                   <td class="set-table__plan">${r.plan || "—"}</td>
-                  <td><input type="text" inputmode="decimal" class="set-table__input" data-row="${i}" data-field="weight" placeholder="重量" /></td>
-                  <td><input type="text" inputmode="numeric" class="set-table__input" data-row="${i}" data-field="reps" placeholder="次数" /></td>
+                  <td><input type="text" inputmode="decimal" class="set-table__input" data-row="${i}" data-field="weight" placeholder="重量" value="${r.weight || ""}" /></td>
+                  <td><input type="text" inputmode="numeric" class="set-table__input" data-row="${i}" data-field="reps" placeholder="次数" value="${r.reps || ""}" /></td>
                 </tr>`,
               )
               .join("")}
@@ -395,16 +411,31 @@ export async function render(container) {
     cancelBtn.hidden = true;
   }
 
-  function loadIntoForm(record, { asCopy }) {
+  async function loadIntoForm(record, { asCopy }) {
     editingId = asCopy ? null : record.id;
     exitWodMode();
     recordDay = record.day;
     paintDayPicker();
-    titleInput.value = record.title || "";
-    bodyInput.value = record.body;
+    await paintWodPicker();
     thoughtsInput.value = "";
     submitBtn.textContent = asCopy ? "另存为新记录" : "保存修改";
     cancelBtn.hidden = false;
+
+    // 这条记录当初是从某个 WOD 导入、并且存了当时的段落勾选/填写状态——
+    // 退回结构化的按段落界面，而不是甩给用户一整段拼好的文字去手改
+    // （用户明确要求"退回段落那样的修改"）。那天的 WOD 数据万一没了
+    // （比如极少见的被删掉），就老实退回手写模式兜底，不留一片空白。
+    if (record.wod_id && record.wod_state) {
+      const wods = await listWodsForDay(record.day);
+      const wod = wods.find((w) => w.id === record.wod_id);
+      if (wod) {
+        enterWodMode(wod, { ...record.wod_state, title: record.title });
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+    }
+    titleInput.value = record.title || "";
+    bodyInput.value = record.body;
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -496,6 +527,16 @@ export async function render(container) {
     const bodyText = fromWod ? composeFromSections() : bodyInput.value.trim();
     if (!bodyText) return;
 
+    // 结构化的段落状态本身也要存下来（不只是拼好的 body 文字）——不然
+    // 下次点"改"就只能拿到一段拼好的文字，没法退回按段落勾选/填写的
+    // 界面（用户明确要求改的时候要能退回段落模式，不是直接编辑文字）
+    const wodState = fromWod
+      ? {
+          classTime: wodClassTime,
+          sections: [...sectionStates.entries()].map(([id, s]) => ({ id, ...s })),
+        }
+      : null;
+
     submitting = true;
     submitBtn.disabled = true;
     try {
@@ -510,6 +551,7 @@ export async function render(container) {
         volume: 0,
         muscles,
         wod_id: fromWod ? fromWod.id : null,
+        wod_state: wodState,
       };
 
       const saved = editingId ? await updateWorkout(editingId, payload) : await addWorkout(payload);
