@@ -1100,3 +1100,110 @@ button.linklike {
 .timer-actions .btn {
   flex: 1;
 }
+
+/* ---------- 训练记录 ---------- */
+
+.train-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.train-title {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
+}
+
+.train-body {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.train-preview {
+  background: var(--sage-wash);
+  border-radius: var(--r);
+  padding: 10px 12px;
+}
+
+.train-preview__summary {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sage-deep);
+}
+
+.train-preview__list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.8;
+}
+
+.train-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.train-actions .btn {
+  flex: 1;
+}
+
+.train-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.train-card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--rl);
+  padding: 14px;
+}
+
+.train-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.train-card__head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: "Songti SC", serif;
+}
+
+.train-card__time {
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.train-card__moves {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 6px 0;
+}
+
+.train-card__volume {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+}
+
+.train-card__actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+}

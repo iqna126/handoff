@@ -89,6 +89,41 @@ export async function listWorkoutsForDay(day) {
   return data;
 }
 
+export async function listAllWorkouts() {
+  const { data, error } = await supabase
+    .from("workouts")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function addWorkout({ day, title, body, items, volume, muscles }) {
+  const { data, error } = await supabase
+    .from("workouts")
+    .insert({ day, title, body, items, volume, muscles })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateWorkout(id, { day, title, body, items, volume, muscles }) {
+  const { data, error } = await supabase
+    .from("workouts")
+    .update({ day, title, body, items, volume, muscles })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteWorkout(id) {
+  const { error } = await supabase.from("workouts").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function listPRs() {
   const { data, error } = await supabase.from("prs").select("*");
   if (error) throw error;
@@ -129,6 +164,21 @@ export async function unlockSkill(movementKey) {
 
 export async function lockSkill(movementKey) {
   const { error } = await supabase.from("skills").delete().eq("movement_key", movementKey);
+  if (error) throw error;
+}
+
+// 保存训练记录时自动解锁（SPEC.md §6.3）——只对调用方已经确认"当前还没
+// 解锁"的动作调用，所以这里用普通 insert，不用 upsert，不会覆盖掉已有的
+// 手动解锁记录（比如覆盖掉用户自己填的解锁日期）。
+export async function autoUnlockSkill(movementKey, { weightText, sourceLine, workoutId }) {
+  const { error } = await supabase.from("skills").insert({
+    movement_key: movementKey,
+    unlocked_on: new Date().toISOString().slice(0, 10),
+    weight_text: weightText || null,
+    source_line: sourceLine || null,
+    auto: true,
+    workout_id: workoutId || null,
+  });
   if (error) throw error;
 }
 

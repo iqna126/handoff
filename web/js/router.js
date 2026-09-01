@@ -7,14 +7,14 @@
 import * as today from "./pages/today.js";
 import * as todos from "./pages/todos.js";
 import * as ideas from "./pages/ideas.js";
-import * as stub from "./pages/stub.js";
+import * as train from "./pages/train.js";
 import * as profile from "./pages/profile.js";
 
 const TABS = [
   { hash: "today", label: "今日", render: (el) => today.render(el) },
   { hash: "todos", label: "待办", render: (el) => todos.render(el) },
   { hash: "ideas", label: "想法", render: (el) => ideas.render(el) },
-  { hash: "train", label: "训练", render: (el) => stub.render(el, "训练") },
+  { hash: "train", label: "训练", render: (el) => train.render(el) },
   { hash: "profile", label: "我的", render: (el, sub) => profile.render(el, sub) },
 ];
 
