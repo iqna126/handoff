@@ -783,11 +783,6 @@ button.linklike {
   color: var(--sage-deep);
 }
 
-.plate-breakdown {
-  font-size: 12px;
-  color: var(--ink-soft);
-  margin-top: 6px;
-}
 
 /* ---------- 技能树 ---------- */
 

@@ -1,11 +1,12 @@
-// PR 墙（SPEC.md §5）：14 个项目，1RM 输入 + 配重表（取整到实际能配出来的
-// 重量，跟配重计算器共用同一套算法），KG/LB 用全局单位设置。
+// PR 墙（SPEC.md §5）：14 个项目，1RM 输入 + 百分比重量表（直接算，四舍
+// 五入保留两位小数——不做配片取整，用户明确要求去掉），KG/LB 用全局单位
+// 设置。
 //
 // 老版单文件 App 里有一个"从训练记录扫描 PR"的功能（§5.1），这里先不做——
 // 它依赖训练记录里能解析出结构化的动作+重量，而训练记录编辑器/自动同步
 // 三步流程这两条路径都还没做，扫描无源可扫，等那部分做完再回来接上。
 import { listPRs, upsertPR, deletePR, getUnitPref, setUnitPref } from "../data.js";
-import { toDisplay, fromDisplay, formatWeight, kgToLb, roundToPlates, getSavedBar } from "../units.js";
+import { toDisplay, fromDisplay, formatWeight, kgToLb } from "../units.js";
 
 const PCTS = [50, 60, 70, 75, 80, 85, 90, 95, 100, 105];
 
@@ -59,7 +60,6 @@ export async function render(container) {
     const meta = catalog.PR_LIST.find((p) => p.k === detailKey);
     const rec = prMap()[detailKey];
     const initial = rec ? toDisplay(rec.kg, unit) : "";
-    const bar = getSavedBar(unit);
 
     container.innerHTML = `
       <button type="button" class="back-btn" data-back>‹ PR 墙</button>
@@ -74,15 +74,12 @@ export async function render(container) {
         <input type="text" inputmode="decimal" class="pr-input" value="${initial}" />
       </div>
       <div class="pct-grid"></div>
-      <div class="plate-breakdown"></div>
       <button type="button" class="btn" data-save style="width:100%;margin-top:6px">更新 PR 成绩</button>
       ${rec ? `<button type="button" class="btn ghost danger" data-remove style="width:100%;margin-top:8px">清除此项记录</button>` : ""}
     `;
 
     const input = container.querySelector(".pr-input");
     const pctGrid = container.querySelector(".pct-grid");
-    const breakdown = container.querySelector(".plate-breakdown");
-    let expanded = null;
 
     function paintPcts() {
       const base = fromDisplay(input.value, unit);
@@ -93,33 +90,12 @@ export async function render(container) {
           </div>`;
         }
         const kg = (base * pct) / 100;
-        const targetInUnit = unit === "kg" ? kg : kgToLb(kg);
-        const { rounded } = roundToPlates(targetInUnit, unit, bar);
-        return `<button type="button" class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}" data-pct="${pct}">
+        const value = unit === "kg" ? kg : kgToLb(kg);
+        return `<div class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}">
           <div class="pct-cell__pct">${pct}%</div>
-          <div class="pct-cell__val">${formatWeight(rounded)}</div>
-        </button>`;
+          <div class="pct-cell__val">${formatWeight(value)}</div>
+        </div>`;
       }).join("");
-      pctGrid.querySelectorAll("[data-pct]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const pct = Number(btn.dataset.pct);
-          expanded = expanded === pct ? null : pct;
-          paintBreakdown(base);
-        });
-      });
-      paintBreakdown(base);
-    }
-
-    function paintBreakdown(base) {
-      if (expanded == null || base == null) {
-        breakdown.textContent = "";
-        return;
-      }
-      const kg = (base * expanded) / 100;
-      const targetInUnit = unit === "kg" ? kg : kgToLb(kg);
-      const { rounded, perSide } = roundToPlates(targetInUnit, unit, bar);
-      const sides = perSide.length ? perSide.join(" + ") : "无（低于杆重）";
-      breakdown.textContent = `${expanded}%：${formatWeight(rounded)}${unit} ＝ 杆 ${bar}${unit} ＋ 每边 ${sides}`;
     }
 
     input.addEventListener("input", paintPcts);
