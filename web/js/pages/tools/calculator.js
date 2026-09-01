@@ -37,7 +37,7 @@ export async function render(container, seed = {}) {
       <button type="button" class="unit-toggle" data-unit-toggle></button>
     </div>
     <div class="big-input">
-      <input type="number" inputmode="decimal" step="0.5" class="calc-input" value="${kgValue == null ? "" : toDisplay(kgValue, unit)}" />
+      <input type="text" inputmode="decimal" class="calc-input" value="${kgValue == null ? "" : toDisplay(kgValue, unit)}" />
       <span class="calc-unit-label">${unit}</span>
     </div>
     <div class="chip-row calc-pr-chips"></div>
@@ -63,7 +63,7 @@ export async function render(container, seed = {}) {
   }
 
   function paintUnitBtn() {
-    unitBtn.innerHTML = `<span class="${unit === "kg" ? "on" : ""}">KG</span> / <span class="${unit === "lb" ? "on" : ""}">LB</span>`;
+    unitBtn.innerHTML = `<span class="${unit === "lb" ? "on" : ""}">LB</span> / <span class="${unit === "kg" ? "on" : ""}">KG</span>`;
   }
 
   function paintBarChips() {
@@ -94,12 +94,10 @@ export async function render(container, seed = {}) {
           <div class="pct-cell__pct">${pct}%</div><div class="pct-cell__val">—</div>
         </div>`;
       }
-      const { rounded, exact } = roundToPlates(targetInUnit(pct), unit, bar);
-      const showExact = Math.abs(rounded - exact) > 0.01;
+      const { rounded } = roundToPlates(targetInUnit(pct), unit, bar);
       return `<button type="button" class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}" data-pct="${pct}">
         <div class="pct-cell__pct">${pct}%</div>
         <div class="pct-cell__val">${Math.round(rounded)}</div>
-        ${showExact ? `<div class="pct-cell__exact">精确 ${exact.toFixed(1)}</div>` : ""}
       </button>`;
     }).join("");
 

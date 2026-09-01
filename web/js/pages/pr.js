@@ -27,7 +27,7 @@ export async function render(container) {
       <div class="cal-header" style="margin-bottom:10px">
         <span class="entry-row__hint">${prs.length} / ${catalog.PR_LIST.length} 项有成绩</span>
         <button type="button" class="unit-toggle" data-unit-toggle>
-          <span class="${unit === "kg" ? "on" : ""}">KG</span> / <span class="${unit === "lb" ? "on" : ""}">LB</span>
+          <span class="${unit === "lb" ? "on" : ""}">LB</span> / <span class="${unit === "kg" ? "on" : ""}">KG</span>
         </button>
       </div>
       <div class="pr-grid"></div>
@@ -71,7 +71,7 @@ export async function render(container) {
       </div>
       <div class="big-input" style="margin-top:14px">
         <span style="color:var(--ink-soft);font-size:14px">1RM 重量</span>
-        <input type="number" inputmode="decimal" step="0.5" class="pr-input" value="${initial}" />
+        <input type="text" inputmode="decimal" class="pr-input" value="${initial}" />
       </div>
       <div class="pct-grid"></div>
       <div class="plate-breakdown"></div>
@@ -94,12 +94,10 @@ export async function render(container) {
         }
         const kg = (base * pct) / 100;
         const targetInUnit = unit === "kg" ? kg : kgToLb(kg);
-        const { rounded, exact } = roundToPlates(targetInUnit, unit, bar);
-        const showExact = Math.abs(rounded - exact) > 0.01;
+        const { rounded } = roundToPlates(targetInUnit, unit, bar);
         return `<button type="button" class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}" data-pct="${pct}">
           <div class="pct-cell__pct">${pct}%</div>
           <div class="pct-cell__val">${Math.round(rounded)}</div>
-          ${showExact ? `<div class="pct-cell__exact">精确 ${exact.toFixed(1)}</div>` : ""}
         </button>`;
       }).join("");
       pctGrid.querySelectorAll("[data-pct]").forEach((btn) => {

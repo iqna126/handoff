@@ -768,12 +768,6 @@ button.linklike {
   font-family: var(--font-mono);
 }
 
-.pct-cell__exact {
-  font-size: 9px;
-  margin-top: 1px;
-  opacity: 0.7;
-}
-
 .unit-toggle {
   background: var(--card);
   border: 1px solid var(--rule);
