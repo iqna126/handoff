@@ -7,6 +7,7 @@
 // 三步流程这两条路径都还没做，扫描无源可扫，等那部分做完再回来接上。
 import { listPRs, upsertPR, deletePR, getUnitPref, setUnitPref } from "../data.js";
 import { toDisplay, fromDisplay, formatWeight, kgToLb } from "../units.js";
+import { showConfirm, showAlert } from "../dialog.js";
 
 const PCTS = [50, 60, 70, 75, 80, 85, 90, 95, 100, 105];
 
@@ -109,7 +110,7 @@ export async function render(container) {
     container.querySelector("[data-save]").addEventListener("click", async () => {
       const v = parseFloat(input.value);
       if (Number.isNaN(v) || v <= 0) {
-        alert("填个数字");
+        await showAlert("填个数字");
         return;
       }
       const kg = fromDisplay(String(v), unit);
@@ -118,13 +119,13 @@ export async function render(container) {
       prs = await listPRs();
       detailKey = null;
       paintList();
-      alert(beat ? "破纪录了 🎉" : "已更新");
+      await showAlert(beat ? "破纪录了 🎉" : "已更新");
     });
 
     const removeBtn = container.querySelector("[data-remove]");
     if (removeBtn) {
       removeBtn.addEventListener("click", async () => {
-        if (!confirm(`清除「${meta.n}」的 PR 记录？`)) return;
+        if (!(await showConfirm(`清除「${meta.n}」的 PR 记录？`))) return;
         await deletePR(rec.id);
         prs = await listPRs();
         detailKey = null;

@@ -1,6 +1,7 @@
 // 想法 tab（SPEC.md §3）：纯时间流，最新在前，删除二次确认。
 import { listIdeas, addIdea, deleteIdea } from "../data.js";
 import { formatReadableDateTime, todayStr } from "../dateutils.js";
+import { showConfirm } from "../dialog.js";
 
 export async function render(container) {
   container.innerHTML = `
@@ -52,7 +53,7 @@ function renderIdeaRow(idea, onChange) {
   del.className = "idea-row__delete";
   del.textContent = "删除";
   del.addEventListener("click", async () => {
-    if (!confirm("删除这条想法？")) return;
+    if (!(await showConfirm("删除这条想法？"))) return;
     await deleteIdea(idea.id);
     await onChange();
   });

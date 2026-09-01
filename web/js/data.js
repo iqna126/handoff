@@ -64,6 +64,16 @@ export async function listIdeas() {
   return data;
 }
 
+export async function listIdeasForDay(day) {
+  const { data, error } = await supabase
+    .from("ideas")
+    .select("*")
+    .eq("day", day)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
 export async function addIdea({ text, day }) {
   const { data, error } = await supabase.from("ideas").insert({ text, day }).select().single();
   if (error) throw error;
@@ -198,15 +208,4 @@ export async function addWish(movementKey) {
 export async function removeWish(movementKey) {
   const { error } = await supabase.from("wishes").delete().eq("movement_key", movementKey);
   if (error) throw error;
-}
-
-// 日历上要标小圆点的日期集合：有未完成待办或训练记录的那些天（SPEC.md §1.1）
-export async function listMarkedDays() {
-  const [{ data: todos, error: e1 }, { data: workouts, error: e2 }] = await Promise.all([
-    supabase.from("todos").select("day").eq("done", false),
-    supabase.from("workouts").select("day"),
-  ]);
-  if (e1) throw e1;
-  if (e2) throw e2;
-  return new Set([...todos.map((t) => t.day), ...workouts.map((w) => w.day)]);
 }

@@ -164,6 +164,16 @@ input {
   font-weight: 700;
 }
 
+.nav-tab:focus {
+  outline: none;
+}
+
+.nav-tab:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
 h2 {
   font-size: 12px;
   letter-spacing: 1px;
@@ -305,21 +315,6 @@ button.linklike {
 
 .cal-cell--today.cal-cell--selected {
   border-color: var(--ink);
-}
-
-.cal-dot {
-  position: absolute;
-  bottom: 5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--sage);
-}
-
-.cal-cell--today .cal-dot {
-  background: #fff;
 }
 
 /* ---------- 卡片 / 表单基础样式 ---------- */
@@ -468,14 +463,12 @@ button.linklike {
 
 /* ---------- 想法 ---------- */
 
-.idea-form,
-.idea-quick-form {
+.idea-form {
   display: flex;
   gap: 8px;
 }
 
-.idea-input,
-.idea-quick-input {
+.idea-input {
   flex: 1;
   min-width: 0;
   padding: 10px 12px;
@@ -484,8 +477,7 @@ button.linklike {
   background: var(--card);
 }
 
-.idea-form button,
-.idea-quick-form button {
+.idea-form button {
   padding: 10px 16px;
   border: none;
   border-radius: var(--r);
@@ -493,6 +485,27 @@ button.linklike {
   color: #fff;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* 今日 tab 的想法：只读展示，输入统一去想法 tab（用户明确要求） */
+.today-idea__view {
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 14px;
+}
+
+.today-idea__empty {
+  display: block;
+  padding: 12px 14px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--r);
+  color: var(--ink-faint);
+  font-size: 14px;
+  text-decoration: none;
 }
 
 .idea-list {
@@ -1266,27 +1279,6 @@ button.linklike {
   font-size: 13px;
 }
 
-.train-preview {
-  background: var(--sage-wash);
-  border-radius: var(--r);
-  padding: 10px 12px;
-}
-
-.train-preview__summary {
-  margin: 0 0 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sage-deep);
-}
-
-.train-preview__list {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 13px;
-  color: var(--ink-soft);
-  line-height: 1.8;
-}
-
 .train-actions {
   display: flex;
   gap: 8px;
@@ -1329,21 +1321,106 @@ button.linklike {
   white-space: nowrap;
 }
 
-.train-card__moves {
+.train-card__body {
+  font-family: var(--font-mono);
   font-size: 13px;
   color: var(--ink-soft);
-  margin: 6px 0;
-}
-
-.train-card__volume {
-  font-size: 12px;
-  color: var(--ink-faint);
-  margin: 6px 0 0;
-  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  margin: 8px 0;
 }
 
 .train-card__actions {
   display: flex;
   gap: 14px;
   margin-top: 10px;
+}
+
+/* ---------- 自定义弹层（dialog.js，代替系统 alert/confirm/prompt） ---------- */
+
+.hf-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 26, 22, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+.hf-dialog-box {
+  background: var(--card);
+  border-radius: var(--rl);
+  padding: 20px;
+  width: 100%;
+  max-width: 320px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.hf-dialog-message {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.hf-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--paper);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.hf-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.hf-dialog-btn {
+  padding: 9px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hf-dialog-btn--primary {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: #fff;
+}
+
+/* ---------- 设置（我的 → 设置） ---------- */
+
+.settings-unit-row {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-unit-btn {
+  flex: 1;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
+  color: var(--ink-soft);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.settings-unit-btn--active {
+  background: var(--sage-wash);
+  border-color: var(--sage);
+  color: var(--sage-deep);
 }

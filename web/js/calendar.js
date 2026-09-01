@@ -11,7 +11,7 @@ import {
 } from "./dateutils.js";
 
 // dates: 要渲染的日期字符串数组（7 个或补齐后的整月）
-// opts: { selected, marked: Set, refMonth: 用于判断是否"非本月"变灰, onPick(dateStr) }
+// opts: { selected, refMonth: 用于判断是否"非本月"变灰, onPick(dateStr) }
 export function renderDateGrid(container, dates, opts) {
   const today = todayStr();
   container.innerHTML = "";
@@ -35,12 +35,6 @@ export function renderDateGrid(container, dates, opts) {
     const num = document.createElement("span");
     num.textContent = String(formatDayOfMonth(dateStr));
     cell.appendChild(num);
-
-    if (opts.marked?.has(dateStr)) {
-      const dot = document.createElement("span");
-      dot.className = "cal-dot";
-      cell.appendChild(dot);
-    }
 
     cell.addEventListener("click", () => opts.onPick(dateStr));
     container.appendChild(cell);

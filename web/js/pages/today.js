@@ -1,15 +1,14 @@
 // 今日 tab（SPEC.md §1）：日历（周/月视图切换，今天与选中状态分开表示）+
-// 所选日期的待办（可勾选） + 训练记录（纯展示，不可跳转） + 想法快速输入
-// （有内容时才出现保存按钮）。
+// 所选日期的待办（可勾选） + 训练记录（纯展示，不可跳转） + 今天的想法
+// （纯展示，不在这里输入——输入统一去想法 tab，用户明确要求）。
 import { renderWeekGrid, renderMonthGrid } from "../calendar.js";
 import { todayStr, formatMonthTitle, addDays, addMonths } from "../dateutils.js";
-import { listTodos, setTodoDone, listWorkoutsForDay, addIdea, listMarkedDays } from "../data.js";
+import { listTodos, setTodoDone, listWorkoutsForDay, listIdeasForDay } from "../data.js";
 
 export async function render(container) {
   let mode = "week"; // "week" | "month"
   let selected = todayStr();
   let anchor = todayStr(); // 当前周/月视图定位在哪个日期上
-  let marked = new Set();
 
   container.innerHTML = `
     <div class="cal-header">
@@ -36,11 +35,8 @@ export async function render(container) {
     </section>
 
     <section class="today-idea">
-      <h2>想法</h2>
-      <form class="idea-quick-form">
-        <input type="text" class="idea-quick-input" placeholder="有什么想法？" />
-        <button type="submit" hidden>保存</button>
-      </form>
+      <h2>今天的想法</h2>
+      <div class="today-idea__body"></div>
     </section>
   `;
 
@@ -49,18 +45,16 @@ export async function render(container) {
   const modeBtns = container.querySelectorAll(".cal-mode-btn");
   const todoList = container.querySelector(".today-todos .todo-list");
   const workoutBody = container.querySelector(".today-workout__body");
-  const ideaForm = container.querySelector(".idea-quick-form");
-  const ideaInput = container.querySelector(".idea-quick-input");
-  const ideaSaveBtn = ideaForm.querySelector("button[type=submit]");
+  const ideaBody = container.querySelector(".today-idea__body");
 
   function paintCalendar() {
     modeBtns.forEach((b) => b.classList.toggle("cal-mode-btn--active", b.dataset.mode === mode));
     if (mode === "week") {
       navTitle.textContent = formatMonthTitle(anchor);
-      renderWeekGrid(grid, anchor, { selected, marked, onPick: pickDate });
+      renderWeekGrid(grid, anchor, { selected, onPick: pickDate });
     } else {
       navTitle.textContent = formatMonthTitle(anchor);
-      renderMonthGrid(grid, anchor, { selected, marked, onPick: pickDate });
+      renderMonthGrid(grid, anchor, { selected, onPick: pickDate });
     }
   }
 
@@ -107,22 +101,30 @@ export async function render(container) {
     }
   }
 
-  ideaInput.addEventListener("input", () => {
-    ideaSaveBtn.hidden = ideaInput.value.trim().length === 0;
-  });
+  // 今天的想法：纯展示，不在这里输入——想记点什么去想法 tab（跟 selected
+  // 日期无关，这里固定是"今天"，不跟着日历选中的日期走）
+  async function paintTodayIdea() {
+    const ideas = await listIdeasForDay(todayStr());
+    ideaBody.innerHTML = "";
+    if (ideas.length === 0) {
+      const empty = document.createElement("a");
+      empty.className = "today-idea__empty";
+      empty.href = "#ideas";
+      empty.textContent = "今天有什么想到的想记下来的吗？去想法里写吧";
+      ideaBody.appendChild(empty);
+      return;
+    }
+    for (const idea of ideas) {
+      const p = document.createElement("p");
+      p.className = "today-idea__view";
+      p.textContent = idea.text;
+      ideaBody.appendChild(p);
+    }
+  }
 
-  ideaForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const text = ideaInput.value.trim();
-    if (!text) return;
-    await addIdea({ text, day: todayStr() });
-    ideaInput.value = "";
-    ideaSaveBtn.hidden = true;
-  });
-
-  marked = await listMarkedDays();
   paintCalendar();
   await refreshDayContent();
+  await paintTodayIdea();
 }
 
 function renderTodoCheckRow(todo, onChange) {
@@ -159,14 +161,14 @@ function renderWorkoutCard(workout) {
   body.textContent = workout.body;
   card.appendChild(body);
 
-  const muscles = workout.muscles || [];
+  const muscles = (workout.muscles || []).filter((m) => m.key !== "cardio");
   if (muscles.length > 0) {
     const tags = document.createElement("div");
     tags.className = "muscle-tags";
     for (const m of muscles) {
       const tag = document.createElement("span");
       tag.className = "muscle-tag";
-      tag.textContent = `${m.name} ×${m.n}`;
+      tag.textContent = m.name;
       tags.appendChild(tag);
     }
     card.appendChild(tags);

@@ -3,6 +3,7 @@
 import { listTodos, addTodo, setTodoDone, deleteTodo } from "../data.js";
 import { renderMonthGrid } from "../calendar.js";
 import { todayStr, formatMonthDay, formatMonthTitle, addMonths } from "../dateutils.js";
+import { showConfirm } from "../dialog.js";
 
 export async function render(container) {
   let pickedDate = todayStr();
@@ -139,7 +140,7 @@ function renderTodoRow(todo, onChange) {
   del.className = "todo-row__delete";
   del.textContent = "删除";
   del.addEventListener("click", async () => {
-    if (!confirm(`删除待办「${todo.title}」？`)) return;
+    if (!(await showConfirm(`删除待办「${todo.title}」？`))) return;
     await deleteTodo(todo.id);
     await onChange();
   });

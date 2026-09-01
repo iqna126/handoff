@@ -23,11 +23,11 @@ import {
   autoUnlockSkill,
   addTodo,
 } from "../data.js";
-import { parseBlock, totalVolume } from "../wodtext.js";
 import { muscleProfile } from "../muscles.js";
 import { matchSkills } from "../skillmatch.js";
 import { renderMonthGrid } from "../calendar.js";
 import { cleanLines } from "../htmlclean.js";
+import { showConfirm, showPrompt } from "../dialog.js";
 import {
   todayStr,
   formatMonthDay,
@@ -100,7 +100,6 @@ export async function render(container) {
 
       <div class="train-manual">
         <textarea class="train-body" rows="6" placeholder="一行一个动作，比如：&#10;Back Squat 100kg 5x5&#10;Row 500m 2min"></textarea>
-        <div class="train-preview"></div>
       </div>
       <div class="train-sections" hidden></div>
 
@@ -123,7 +122,6 @@ export async function render(container) {
   const titleInput = container.querySelector(".train-title");
   const manualEl = container.querySelector(".train-manual");
   const bodyInput = container.querySelector(".train-body");
-  const preview = container.querySelector(".train-preview");
   const sectionsEl = container.querySelector(".train-sections");
   const thoughtsInput = container.querySelector(".train-thoughts");
   const submitBtn = container.querySelector("[data-submit]");
@@ -235,7 +233,6 @@ export async function render(container) {
     sectionsEl.hidden = true;
     titleInput.value = "";
     bodyInput.value = "";
-    paintPreview();
   }
 
   function paintSections() {
@@ -355,11 +352,9 @@ export async function render(container) {
     }
   }
 
-  // 把结构化的段落状态拼成最终存的 body 文本 + items——力量段直接拿用户
-  // 填的重量/次数拼成"标准行"喂给 parseLine，复用同一套容量计算，不用
-  // 另外发明一套；metcon/其它段落是自由文本，一起丢进 parseBlock。
-  // 这样"识别到 N 个动作"统计的是用户真的填了数据的那些行，不会把警告/
-  // 计划原文里的每一句话都当成一个"动作"。
+  // 把结构化的段落状态拼成最终存的 body 文本——力量段把用户填的重量/次数
+  // 跟这一组的计划提示拼在同一行（不拆成两行），保存下来的是一段可读的
+  // 训练记录文本，不需要另外再解析。
   function composeFromSections() {
     const lines = [];
     for (const section of activeWod.sections || []) {
@@ -371,8 +366,6 @@ export async function render(container) {
           if (!r.weight && !r.reps) continue;
           const weightPart = r.weight ? `${r.weight}lb` : "";
           const repsPart = r.reps ? `1x${r.reps}` : "";
-          // 计划提示跟这一组的实际表现拼在同一行——分开成两行的话，"计划：..."
-          // 那一行也会被 parseBlock 当成单独一个"动作"，把统计吹高
           const planPart = r.plan ? `（计划：${r.plan}）` : "";
           lines.push(`${section.title} ${weightPart} ${repsPart} ${planPart}`.trim());
         }
@@ -389,28 +382,6 @@ export async function render(container) {
       lines.push("");
     }
     return lines.join("\n").trim();
-  }
-
-  // ---------- 手写模式的实时解析预览（SPEC.md §4.3） ----------
-
-  function paintPreview() {
-    const items = parseBlock(bodyInput.value);
-    if (items.length === 0) {
-      preview.innerHTML = `<p class="empty-hint">还没识别到动作——解析失败不影响保存，原文原样保留。</p>`;
-      return;
-    }
-    const volume = totalVolume(items);
-    preview.innerHTML = `
-      <p class="train-preview__summary">识别到 ${items.length} 个动作 · 总容量 ${Math.round(volume)} kg</p>
-      <ul class="train-preview__list">
-        ${items
-          .map(
-            (it) =>
-              `<li>${it.name}${it.weightText ? ` · ${it.weightText}` : ""}${it.repsText ? ` · ${it.repsText}` : ""}</li>`,
-          )
-          .join("")}
-      </ul>
-    `;
   }
 
   // ---------- 表单重置 / 载入历史记录 ----------
@@ -434,7 +405,6 @@ export async function render(container) {
     thoughtsInput.value = "";
     submitBtn.textContent = asCopy ? "另存为新记录" : "保存修改";
     cancelBtn.hidden = false;
-    paintPreview();
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -452,30 +422,33 @@ export async function render(container) {
   function renderHistoryCard(record) {
     const card = document.createElement("div");
     card.className = "train-card";
-    const moveNames = (record.items || []).map((it) => it.name).join(" · ");
-    const muscles = record.muscles || [];
+    // 肌群标签不显示 ×N 计数、也不显示"有氧"——看内容就知道有没有有氧动作，
+    // 数字和 cardio 标签都是噪音（用户明确要求去掉）
+    const muscles = (record.muscles || []).filter((m) => m.key !== "cardio");
     card.innerHTML = `
       <div class="train-card__head">
         <h3>${record.title || "训练记录"}</h3>
         <span class="train-card__time">${formatMonthDay(record.day)}</span>
       </div>
-      ${moveNames ? `<p class="train-card__moves">${moveNames}</p>` : ""}
+      <pre class="train-card__body"></pre>
       ${
         muscles.length
-          ? `<div class="muscle-tags">${muscles.map((m) => `<span class="muscle-tag">${m.name} ×${m.n}</span>`).join("")}</div>`
+          ? `<div class="muscle-tags">${muscles.map((m) => `<span class="muscle-tag">${m.name}</span>`).join("")}</div>`
           : ""
       }
-      <p class="train-card__volume">总容量 ${Math.round(record.volume || 0)} kg</p>
       <div class="train-card__actions">
         <button type="button" class="linklike" data-copy>复制</button>
         <button type="button" class="linklike" data-edit>改</button>
         <button type="button" class="linklike" data-delete style="color:var(--signal)">删</button>
       </div>
     `;
+    // textContent（不是拼进 innerHTML 的字符串）：保留原文真实换行，
+    // 也不会把 body 里的尖括号当成标签解析
+    card.querySelector(".train-card__body").textContent = record.body || "";
     card.querySelector("[data-copy]").addEventListener("click", () => loadIntoForm(record, { asCopy: true }));
     card.querySelector("[data-edit]").addEventListener("click", () => loadIntoForm(record, { asCopy: false }));
     card.querySelector("[data-delete]").addEventListener("click", async () => {
-      if (!confirm(`删除「${record.title || "这条训练记录"}」？`)) return;
+      if (!(await showConfirm(`删除「${record.title || "这条训练记录"}」？`))) return;
       await deleteWorkout(record.id);
       records = await listAllWorkouts();
       await paintHistory();
@@ -488,12 +461,14 @@ export async function render(container) {
   async function maybeOfferBooking(wodDay, classTime) {
     const nextWeekDay = addDays(wodDay, 7);
     const weekdayLabel = WEEKDAY_LABELS[(parseDateStr(nextWeekDay).getDay() + 6) % 7];
-    if (!confirm(`要约下周${weekdayLabel}的课吗？`)) return;
+    if (!(await showConfirm(`要约下周${weekdayLabel}的课吗？`))) return;
     // 有真实拉到的上课时间就直接用，不用户再手填一遍；schedule 里确实没有
     // 这个 program 当天时段数据时才退回手填（老数据/极少数情况）
     let time = classTime ? formatTimeOfDay(classTime) : null;
     if (!time) {
-      time = prompt("几点上课？（这个 WOD 没有同步到具体时间，需要手填一次，比如 5:30 PM）");
+      time = await showPrompt("几点上课？（这个 WOD 没有同步到具体时间，需要手填一次）", {
+        placeholder: "比如 5:30 PM",
+      });
       if (!time) return;
     }
     const classType = titleInput.value.trim() || "训练";
@@ -502,11 +477,18 @@ export async function render(container) {
 
   // ---------- 保存 ----------
 
-  bodyInput.addEventListener("input", paintPreview);
   cancelBtn.addEventListener("click", resetForm);
+
+  // 提交按钮没有在保存期间禁用过——网络慢的时候手快点两下，第一下的 await
+  // 还没回来第二下就已经发出去了。第二下发出时 editingId 还是同一个值，
+  // 结果是同一条记录被 PATCH 两次，不会多出一条；但如果是"改"某条记录、
+  // 第一下保存把表单 resetForm() 成"新建"状态之后才点第二下，第二下就会
+  // 变成 addWorkout，凭空多出一条一模一样的记录。禁用按钮把这类竞态挡掉。
+  let submitting = false;
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (submitting) return;
 
     const fromWod = activeWod;
     const wodDay = fromWod ? fromWod.day : null;
@@ -514,38 +496,41 @@ export async function render(container) {
     const bodyText = fromWod ? composeFromSections() : bodyInput.value.trim();
     if (!bodyText) return;
 
-    const thoughts = thoughtsInput.value.trim();
-    const body = thoughts ? `${bodyText}\n\n想法：${thoughts}` : bodyText;
-    const items = parseBlock(body);
-    const volume = totalVolume(items);
-    const muscles = muscleProfile(body);
-    const payload = {
-      day: recordDay,
-      title: titleInput.value.trim(),
-      body,
-      items,
-      volume,
-      muscles,
-      wod_id: fromWod ? fromWod.id : null,
-    };
+    submitting = true;
+    submitBtn.disabled = true;
+    try {
+      const thoughts = thoughtsInput.value.trim();
+      const body = thoughts ? `${bodyText}\n\n想法：${thoughts}` : bodyText;
+      const muscles = muscleProfile(body);
+      const payload = {
+        day: recordDay,
+        title: titleInput.value.trim(),
+        body,
+        items: [],
+        volume: 0,
+        muscles,
+        wod_id: fromWod ? fromWod.id : null,
+      };
 
-    const saved = editingId ? await updateWorkout(editingId, payload) : await addWorkout(payload);
+      const saved = editingId ? await updateWorkout(editingId, payload) : await addWorkout(payload);
 
-    const unlocked = new Set((await listUnlockedSkills()).map((s) => s.movement_key));
-    const hits = matchSkills(body).filter((h) => !unlocked.has(h.key));
-    for (const hit of hits) {
-      await autoUnlockSkill(hit.key, { weightText: hit.weightText, sourceLine: hit.line, workoutId: saved.id });
+      const unlocked = new Set((await listUnlockedSkills()).map((s) => s.movement_key));
+      const hits = matchSkills(body).filter((h) => !unlocked.has(h.key));
+      for (const hit of hits) {
+        await autoUnlockSkill(hit.key, { weightText: hit.weightText, sourceLine: hit.line, workoutId: saved.id });
+      }
+
+      records = await listAllWorkouts();
+      resetForm();
+      await paintHistory();
+      if (fromWod) await maybeOfferBooking(wodDay, wodClassTime);
+    } finally {
+      submitting = false;
+      submitBtn.disabled = false;
     }
-
-    records = await listAllWorkouts();
-    resetForm();
-    await paintHistory();
-    if (hits.length > 0) alert(`已保存，自动解锁了 ${hits.length} 个动作`);
-    if (fromWod) await maybeOfferBooking(wodDay, wodClassTime);
   });
 
   paintDayPicker();
   await paintWodPicker();
-  paintPreview();
   await paintHistory();
 }

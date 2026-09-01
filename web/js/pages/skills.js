@@ -6,6 +6,7 @@
 // "从训练记录自动解锁"（§6.3）依赖训练记录里能解析出结构化动作行，训练
 // 记录的两条录入路径都还没做，这部分先不接——跟 PR 墙暂缓扫描是同一个原因。
 import { listUnlockedSkills, unlockSkill, lockSkill, listWishes, addWish, removeWish } from "../data.js";
+import { showConfirm, showAlert } from "../dialog.js";
 
 export async function render(container) {
   const catalog = await fetch("/data/catalog.json").then((r) => r.json());
@@ -93,13 +94,13 @@ export async function render(container) {
 
     row.addEventListener("click", async () => {
       if (done) {
-        if (!confirm(`取消「${skill.n}」的已解锁状态？`)) return;
+        if (!(await showConfirm(`取消「${skill.n}」的已解锁状态？`))) return;
         await lockSkill(skill.k);
         unlocked.delete(skill.k);
         repaint();
         return;
       }
-      if (!confirm(`标记「${skill.n}」为已解锁？`)) return;
+      if (!(await showConfirm(`标记「${skill.n}」为已解锁？`))) return;
       await unlockSkill(skill.k);
       unlocked.add(skill.k);
       const wasWished = wished.has(skill.k);
@@ -108,7 +109,7 @@ export async function render(container) {
         wished.delete(skill.k);
       }
       repaint();
-      if (wasWished) alert(`心愿达成 ${skill.n} 🎉`);
+      if (wasWished) await showAlert(`心愿达成 ${skill.n} 🎉`);
     });
 
     return row;

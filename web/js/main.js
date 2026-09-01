@@ -1,5 +1,6 @@
 // 入口：登录态判断 + 登录后把 App 外壳（导航 + 路由）挂起来。
 import { SUPABASE_ANON_KEY } from "./config.js";
+import { showAlert } from "./dialog.js";
 
 async function render() {
   const statusEl = document.getElementById("status");
@@ -42,7 +43,7 @@ async function render() {
   auth.onAuthChange(paint);
 
   document.getElementById("google-btn").addEventListener("click", () => {
-    auth.signInWithGoogle().catch((err) => alert(err.message));
+    auth.signInWithGoogle().catch((err) => showAlert(err.message));
   });
 
   let pendingEmail = "";
@@ -55,7 +56,7 @@ async function render() {
       emailForm.hidden = true;
       codeForm.hidden = false;
     } catch (err) {
-      alert(err.message);
+      await showAlert(err.message);
     }
   });
 
@@ -65,7 +66,7 @@ async function render() {
     try {
       await auth.verifyEmailCode(pendingEmail, code);
     } catch (err) {
-      alert(err.message);
+      await showAlert(err.message);
     }
   });
 }
