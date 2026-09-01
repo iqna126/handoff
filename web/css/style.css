@@ -1126,6 +1126,28 @@ button.linklike {
   resize: vertical;
 }
 
+.train-day-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.train-wod-picker {
+  background: var(--sage-wash);
+  border-radius: var(--r);
+  padding: 10px 12px;
+}
+
+.train-thoughts {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
+  font-size: 14px;
+  resize: vertical;
+}
+
 .train-preview {
   background: var(--sage-wash);
   border-radius: var(--r);
