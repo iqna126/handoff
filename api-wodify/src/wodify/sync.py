@@ -40,7 +40,8 @@ def pull_day(c: Client, day: str) -> list[dict]:
     查询本身失败（SessionExpired/VersionStale）要往上抛，不在这里吞掉。
     """
     schedule_payload = c.query("schedule", date=day)
-    programs = parse.parse_schedule(schedule_payload)
+    classes = parse.parse_schedule(schedule_payload)
+    programs = parse.distinct_programs(classes)
 
     rows = []
     for program in programs:
@@ -48,7 +49,8 @@ def pull_day(c: Client, day: str) -> list[dict]:
         parsed = parse.parse_workout(payload)
         if not parsed["sections"]:
             continue
-        rows.append(parse.to_wod_row(day, parsed, payload))
+        class_times = parse.class_times_for_program(classes, program["program_id"])
+        rows.append(parse.to_wod_row(day, parsed, payload, class_times=class_times))
     return rows
 
 

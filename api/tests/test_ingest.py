@@ -96,6 +96,45 @@ class TestIngestUpsert:
         assert captured["headers"]["prefer"] == "resolution=merge-duplicates,return=minimal"
         assert len(json.loads(captured["body"])) == 2, "两条数据要在同一个请求体里"
 
+    def test_title_source_and_class_times_are_forwarded_to_supabase(self):
+        """WodRow 之前只声明了 day/class_type/sections/raw 四个字段——
+        title/source/class_times 会被 Pydantic 静默丢掉，从没真的写进
+        Supabase（wods.title 一直是空的，只是被 class_type 兜底遮住了没
+        发现）。这里直接检查发出去的请求体，不是检查 WodRow 这个类型本身
+        声明了什么字段。
+        """
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(201, json=[])
+
+        app.dependency_overrides[get_http_client] = mock_client(handler)
+
+        resp = client.post(
+            "/api/wod/ingest",
+            json={
+                "wods": [
+                    {
+                        "day": "2026-08-31",
+                        "class_type": "CrossFit",
+                        "title": "CrossFit - Mon, Aug 31",
+                        "sections": [],
+                        "raw": {},
+                        "source": "wodify_api",
+                        "class_times": ["2026-08-31T06:00:00", "2026-08-31T17:30:00"],
+                    },
+                ]
+            },
+            headers={"Authorization": "Bearer secret-token"},
+        )
+
+        assert resp.status_code == 200
+        row = captured["body"][0]
+        assert row["title"] == "CrossFit - Mon, Aug 31"
+        assert row["source"] == "wodify_api"
+        assert row["class_times"] == ["2026-08-31T06:00:00", "2026-08-31T17:30:00"]
+
     def test_no_wods_skips_the_http_call_entirely(self):
         def handler(request: httpx.Request) -> httpx.Response:
             raise AssertionError("没有数据时不该发请求")

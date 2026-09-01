@@ -33,6 +33,40 @@ class TestSections:
         assert parse.parse_workout(payload)["title"] == "CrossFit - Mon, Aug 24"
 
 
+class TestScalingLevels:
+    def test_levels_block_attaches_to_the_metcon_it_follows(self, payload):
+        r = parse.parse_workout(payload)
+        metcon = next(s for s in r["sections"] if s["title"] == "Business Time")
+        names = [lv["name"] for lv in metcon["levels"]]
+        assert names == ["RX", "Level 2", "Masters 55+"], (
+            "RX 是补的，代表主 WOD 自己那份内容；后面两档是从 Levels 组件里拆出来的"
+        )
+
+    def test_rx_level_reuses_the_section_own_lines(self, payload):
+        r = parse.parse_workout(payload)
+        metcon = next(s for s in r["sections"] if s["title"] == "Business Time")
+        rx = metcon["levels"][0]
+        assert rx["lines"] == metcon["lines"], "RX 档就是主 WOD 自己的内容，不是另外编的"
+
+    def test_other_levels_get_their_own_html_stripped_lines(self, payload):
+        r = parse.parse_workout(payload)
+        metcon = next(s for s in r["sections"] if s["title"] == "Business Time")
+        level2 = next(lv for lv in metcon["levels"] if lv["name"] == "Level 2")
+        assert level2["lines"] == ["7 rounds for reps", "Barbell: 75/55lb (34/25kg)"]
+        masters = next(lv for lv in metcon["levels"] if lv["name"] == "Masters 55+")
+        assert masters["lines"] == ["5 rounds for reps"]
+
+    def test_levels_block_is_not_also_dumped_as_a_regular_line(self, payload):
+        r = parse.parse_workout(payload)
+        blob = json.dumps(r, ensure_ascii=False)
+        assert "<p>" not in blob, "Levels 组件的原始 HTML 不该原样漏进任何一个 section 的 lines 里"
+
+    def test_no_levels_block_leaves_levels_empty(self, payload):
+        r = parse.parse_workout(payload)
+        warmup = next(s for s in r["sections"] if s["kind"] == "warmup")
+        assert warmup["levels"] == []
+
+
 class TestFieldTraps:
     def test_description_is_the_metcon_content(self, payload):
         r = parse.parse_workout(payload)
@@ -100,6 +134,17 @@ class TestToWodRow:
         assert row["sections"] == parsed["sections"]
         assert row["raw"] == payload
         assert row["source"] == "wodify_api"
+        assert row["class_times"] == [], "没传 class_times 时默认空列表，不是 None"
+
+    def test_keeps_class_times_when_given(self, payload):
+        parsed = parse.parse_workout(payload)
+        row = parse.to_wod_row(
+            "2026-08-24",
+            parsed,
+            payload,
+            class_times=["2026-08-24T06:00:00", "2026-08-24T09:00:00"],
+        )
+        assert row["class_times"] == ["2026-08-24T06:00:00", "2026-08-24T09:00:00"]
 
     def test_falls_back_to_placeholder_title_when_empty(self):
         parsed = {"title": "", "sections": []}
@@ -109,10 +154,11 @@ class TestToWodRow:
 
 
 class TestParseSchedule:
-    def test_dedupes_by_program_id(self, schedule_payload):
+    def test_returns_every_class_not_deduped(self, schedule_payload):
         classes = parse.parse_schedule(schedule_payload)
-        assert [c["program_id"] for c in classes] == ["101", "202"], (
-            "同一个 program 当天排了两节课，只应该出现一次——查 workout 只需要每个 program 各查一次"
+        assert [c["program_id"] for c in classes] == ["101", "101", "202"], (
+            "同一个 program 当天开了两个时段，都要保留——约课要知道具体是哪个时段，"
+            "去重会把时段信息丢掉（去重是 distinct_programs() 的事，不是这个函数的事）"
         )
 
     def test_placeholder_record_dropped(self, schedule_payload):
@@ -151,6 +197,36 @@ class TestParseSchedule:
             assert parse.parse_schedule(payload) == [
                 {"id": "1", "name": None, "start_time": None, "program_id": "5"}
             ]
+
+
+class TestDistinctPrograms:
+    def test_dedupes_keeping_first_occurrence(self, schedule_payload):
+        classes = parse.parse_schedule(schedule_payload)
+        programs = parse.distinct_programs(classes)
+        assert [p["program_id"] for p in programs] == ["101", "202"], (
+            "查 workout 只需要每个 program 各查一次，不是每节课查一次"
+        )
+        assert programs[0]["start_time"] == "2026-08-24T06:00:00", "保留第一次出现的那条"
+
+    def test_empty_input(self):
+        assert parse.distinct_programs([]) == []
+
+
+class TestClassTimesForProgram:
+    def test_collects_every_time_slot_for_that_program(self, schedule_payload):
+        classes = parse.parse_schedule(schedule_payload)
+        times = parse.class_times_for_program(classes, "101")
+        assert times == ["2026-08-24T06:00:00", "2026-08-24T09:00:00"], (
+            "同一个 program 当天开了两场，约课要能选具体哪一场"
+        )
+
+    def test_program_with_one_slot(self, schedule_payload):
+        classes = parse.parse_schedule(schedule_payload)
+        assert parse.class_times_for_program(classes, "202") == ["2026-08-24T18:00:00"]
+
+    def test_unknown_program_returns_empty(self, schedule_payload):
+        classes = parse.parse_schedule(schedule_payload)
+        assert parse.class_times_for_program(classes, "does-not-exist") == []
 
 
 class TestEmptyBehaviour:

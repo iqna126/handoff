@@ -16,9 +16,25 @@
 
 from __future__ import annotations
 
+import html
 import re
 
 EMPTY_ID = "0"
+
+# scaling 档位块：一个独立组件，Name 形如 "[No, I am Your Father: Levels]"，
+# 内容（Description/Comment）是好几个档位挤在一起的富文本 HTML——见
+# _attach_levels()。跟被删除的粘贴解析器（老版单文件 App 的 wodparse.js）
+# 认的是同一套关键词，只是这边处理的是 API 返回的 HTML 组件，不是粘贴的
+# 纯文本行。
+_LEVELS_BLOCK = re.compile(r"^\[(.+?):\s*Levels?\]$", re.I)
+_LEVEL_HEAD = re.compile(
+    r"^(RX|Level\s*\d+|Masters\s*\d+\+?|Competitor|Scaled|Hotel Gym\s*/?\s*Travel|Travel|Beginner)"
+    r"\s*:\s*(.*)$",
+    re.I,
+)
+_BLOCK_CLOSE = re.compile(r"</(p|div|li)>", re.I)
+_BR = re.compile(r"<br\s*/?>", re.I)
+_TAG = re.compile(r"<[^>]+>")
 
 # 与粘贴解析器同一套判定，保证两条路径产出的 kind 一致
 _TITLE_WARMUP = re.compile(r"^(warm[\s-]*up|general warm|specific)", re.I)
@@ -100,6 +116,17 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
         scheme = (comp.get("MeasureRepScheme") or "").strip()
         is_section = bool(comp.get("IsSection"))
 
+        # scaling 档位块：不当成普通内容行追加，挂到最近一个 metcon 段落的
+        # levels 字段上——不 continue 的话，这个组件的原始 HTML 会被当成
+        # 普通文本重复出现一遍，跟 levels 里已经拆好的内容对不上
+        levels_match = _LEVELS_BLOCK.match(name)
+        if levels_match and not is_section:
+            target = next((s for s in reversed(sections) if s["kind"] == "metcon"), None)
+            if target is not None:
+                raw_blob = "\n".join(b for b in (description, scheme, comment) if b)
+                _attach_levels(target, raw_blob)
+            continue
+
         if is_section:
             cur = {
                 "id": f"s{len(sections) + 1}",
@@ -153,6 +180,52 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
     }
 
 
+def _html_to_lines(blob: str) -> list[str]:
+    """富文本 HTML → 按段落拆开的纯文本行。
+
+    先把块级标签的收尾换成真换行，再去标签——不然相邻的 <p> 会被粘成
+    一整行没有空格（前端 web/js/htmlclean.js 的 stripHtml 是同一个道理，
+    这里是 Python 版本，服务端解析 scaling 档位要用）。
+    """
+    text = _BLOCK_CLOSE.sub("\n", blob or "")
+    text = _BR.sub("\n", text)
+    text = _TAG.sub("", text)
+    text = html.unescape(text)
+    return [line.strip() for line in text.split("\n") if line.strip()]
+
+
+def _attach_levels(section: dict, raw_blob: str) -> None:
+    """把"[Xxx: Levels]"这个组件的内容拆成每个档位一段，挂到 section["levels"]。
+
+    档位标题行形如 "Level 2:"、"Masters 55+:"、"Competitor:"，同一行冒号
+    后面如果还有内容（比如 "RX: 21-15-9"）也算这个档位的第一行。识别不到
+    任何档位标题就什么都不做——不编造结构。
+
+    主 WOD 本身没有单独出现在 Levels 块里（它是 section 自己的 lines），
+    补一份 RX 档进去，方便调用方"档位列表里第一个永远是 RX"这个假设成立。
+    """
+    lines = _html_to_lines(raw_blob)
+    levels: list[dict] = []
+    cur_level: dict | None = None
+    for line in lines:
+        m = _LEVEL_HEAD.match(line)
+        if m:
+            cur_level = {"name": m.group(1).strip(), "lines": []}
+            levels.append(cur_level)
+            rest = (m.group(2) or "").strip()
+            if rest:
+                cur_level["lines"].append(rest)
+            continue
+        if cur_level is not None:
+            cur_level["lines"].append(line)
+
+    if not levels:
+        return
+    if not any(lv["name"].upper() == "RX" for lv in levels):
+        levels.insert(0, {"name": "RX", "lines": list(section["lines"])})
+    section["levels"] = levels
+
+
 def _lines_of(description: str, scheme: str, comment: str) -> list[str]:
     """把一个组件的正文拆成行。
 
@@ -171,12 +244,12 @@ def _lines_of(description: str, scheme: str, comment: str) -> list[str]:
 
 
 def parse_schedule(payload: dict) -> list[dict]:
-    """把 GetClassList 的响应转成当天的班级列表，按 ProgramId 去重。
+    """把 GetClassList 的响应转成当天**每一节课**（不按 ProgramId 去重）。
 
-    不同 program（比如 CrossFit 和 Pump & Burn）当天可能同时排课，各自的
-    workout 内容完全独立——见 client.query() 的 program_id 参数、
-    sync.pull_week() 的两步查询。这里只负责把 program 列表摘出来，
-    真正按 program 分别查 workout 是调用方的事。
+    同一个 program 当天经常开好几个时段（比如 CrossFit 早 6 点、早 9 点、
+    晚 5:30 都各开一场），约课提醒要知道具体是哪个时段，去重会把这些时段
+    信息丢掉——去重、只留"当天有哪些不同 program"这件事交给
+    ``distinct_programs()``，这里只管把原始班级列表摘出来。
 
     响应容器跟 workout 是同一个命名习惯（``Response.ResponseWOD.ResponseWorkout``）：
     真机抓包证实是 ``Response.ResponseClassList.Class.List``——外层 key 见过
@@ -195,7 +268,6 @@ def parse_schedule(payload: dict) -> list[dict]:
             break
     rows = (container or {}).get("List") or []
 
-    seen_programs: set[str] = set()
     classes: list[dict] = []
     for row in rows:
         if not isinstance(row, dict) or not _is_real(row):
@@ -203,23 +275,46 @@ def parse_schedule(payload: dict) -> list[dict]:
         program_id = row.get("ProgramId")
         if program_id is None:
             continue
-        program_id = str(program_id)
-        if program_id in seen_programs:
-            continue
-        seen_programs.add(program_id)
         classes.append(
             {
                 "id": row.get("Id"),
                 "name": row.get("Name"),
                 "start_time": row.get("StartTime"),
-                "program_id": program_id,
+                "program_id": str(program_id),
             }
         )
     return classes
 
 
-def to_wod_row(day: str, parsed: dict, raw: dict) -> dict:
-    """转成 wods 表的一行。原文永久保留，方便日后用更好的规则重解析。"""
+def distinct_programs(classes: list[dict]) -> list[dict]:
+    """从 parse_schedule() 的完整班级列表里去重出当天有哪些不同 program——
+    查 workout 只需要每个 program 各查一次，不需要每节课都查一遍。
+    保留每个 program 第一次出现的那条记录（含它的 id/name/start_time）。
+    """
+    seen: set[str] = set()
+    out: list[dict] = []
+    for c in classes:
+        if c["program_id"] in seen:
+            continue
+        seen.add(c["program_id"])
+        out.append(c)
+    return out
+
+
+def class_times_for_program(classes: list[dict], program_id: str) -> list[str]:
+    """某个 program 当天开了几个时段，取全部 StartTime——约课提醒要让用户
+    选具体哪个时段（同一个 program 当天可能不止一场课）。"""
+    return [
+        c["start_time"] for c in classes if c["program_id"] == program_id and c.get("start_time")
+    ]
+
+
+def to_wod_row(day: str, parsed: dict, raw: dict, *, class_times: list[str] | None = None) -> dict:
+    """转成 wods 表的一行。原文永久保留，方便日后用更好的规则重解析。
+
+    class_times：这个 program 当天开课的具体时段（可能不止一个），约课
+    提醒（SPEC.md §7）要让用户从里面选——不传就是空列表，前端退回手填。
+    """
     title = parsed["title"]
     return {
         "day": day,
@@ -228,4 +323,5 @@ def to_wod_row(day: str, parsed: dict, raw: dict) -> dict:
         "sections": parsed["sections"],
         "raw": raw,
         "source": "wodify_api",
+        "class_times": class_times or [],
     }

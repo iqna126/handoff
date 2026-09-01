@@ -64,6 +64,15 @@ function wodTitle(wod) {
   return wod.class_type || wod.title || "WOD";
 }
 
+function formatTimeOfDay(iso) {
+  const timePart = iso.split("T")[1] || iso;
+  const [hh, mm] = timePart.split(":");
+  const h = Number(hh);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${mm} ${period}`;
+}
+
 export async function render(container) {
   let editingId = null;
   let recordDay = todayStr();
@@ -74,6 +83,7 @@ export async function render(container) {
   // WOD 结构化模式的状态：选中某个 program 后才有值
   let activeWod = null;
   let sectionStates = null; // Map<sectionId, {checked, rows?, resultText?, modText?, freeText?}>
+  let selectedClassTime = null; // 当天这个 program 具体哪个时段的课，约课提醒用
 
   container.innerHTML = `
     <form class="train-form">
@@ -197,6 +207,7 @@ export async function render(container) {
 
   function enterWodMode(wod) {
     activeWod = wod;
+    selectedClassTime = (wod.class_times || [])[0] || null;
     titleInput.value = wodTitle(wod);
     sectionStates = new Map();
     for (const section of wod.sections || []) {
@@ -204,8 +215,14 @@ export async function render(container) {
       if (section.kind === "strength") {
         sectionStates.set(section.id, { checked, rows: buildSetRows(section) });
       } else if (section.kind === "metcon") {
+        // 有 scaling 档位（RX/Level 2/Masters 55+ ...）就给一个档位选择器；
+        // 没有（wodify-pull 拉不到 Levels 子块的老数据）就退回展示整段计划
+        const levels = (section.levels || []).map((lv) => ({
+          name: lv.name,
+          plan: cleanLines(lv.lines).join("\n"),
+        }));
         const plan = cleanLines(section.lines).join("\n");
-        sectionStates.set(section.id, { checked, plan, resultText: "", modText: "" });
+        sectionStates.set(section.id, { checked, levels, levelIndex: 0, plan, resultText: "", modText: "" });
       } else {
         sectionStates.set(section.id, { checked, freeText: cleanLines(section.lines).join("\n") });
       }
@@ -218,6 +235,7 @@ export async function render(container) {
   function exitWodMode() {
     activeWod = null;
     sectionStates = null;
+    selectedClassTime = null;
     manualEl.hidden = false;
     sectionsEl.hidden = true;
     titleInput.value = "";
@@ -230,6 +248,28 @@ export async function render(container) {
     sectionsEl
       .querySelector("[data-back-to-manual]")
       .addEventListener("click", exitWodMode);
+
+    const times = activeWod.class_times || [];
+    if (times.length > 0) {
+      const timeRow = document.createElement("div");
+      timeRow.className = "chip-row";
+      timeRow.style.margin = "0 0 12px";
+      timeRow.innerHTML =
+        `<span class="entry-row__hint" style="margin-right:4px">这节课的时间：</span>` +
+        times
+          .map(
+            (t, i) =>
+              `<button type="button" class="chip ${t === selectedClassTime ? "chip--active" : ""}" data-time="${i}">${formatTimeOfDay(t)}</button>`,
+          )
+          .join("");
+      timeRow.querySelectorAll("[data-time]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectedClassTime = times[Number(btn.dataset.time)];
+          paintSections();
+        });
+      });
+      sectionsEl.appendChild(timeRow);
+    }
 
     for (const section of activeWod.sections || []) {
       const state = sectionStates.get(section.id);
@@ -279,11 +319,33 @@ export async function render(container) {
         });
       });
     } else if (section.kind === "metcon") {
+      const hasLevels = state.levels.length > 0;
+      const planText = hasLevels ? state.levels[state.levelIndex].plan : state.plan;
       body.innerHTML = `
-        <div class="metcon-plan">${state.plan.replace(/\n/g, "<br>") || "（没有计划内容）"}</div>
-        <input type="text" class="metcon-result" placeholder="成绩（比如 78 reps / 12:34）" />
-        <textarea class="metcon-mod" rows="2" placeholder="改动（可选，计划本身还是原样保留在上面）"></textarea>
+        ${
+          hasLevels
+            ? `<div class="chip-row" style="margin:0 0 8px">
+                ${state.levels
+                  .map(
+                    (lv, i) =>
+                      `<button type="button" class="chip ${i === state.levelIndex ? "chip--active" : ""}" data-level="${i}">${lv.name}</button>`,
+                  )
+                  .join("")}
+              </div>`
+            : ""
+        }
+        <div class="metcon-plan">${(planText || "").replace(/\n/g, "<br>") || "（没有计划内容）"}</div>
+        <input type="text" class="metcon-result" placeholder="成绩（比如 78 reps / 12:34）" value="${state.resultText}" />
+        <textarea class="metcon-mod" rows="2" placeholder="改动（可选，计划本身还是原样保留在上面）">${state.modText}</textarea>
       `;
+      if (hasLevels) {
+        body.querySelectorAll("[data-level]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            state.levelIndex = Number(btn.dataset.level);
+            paintSectionBody(body, section, state);
+          });
+        });
+      }
       body.querySelector(".metcon-result").addEventListener("input", (e) => {
         state.resultText = e.target.value;
       });
@@ -320,7 +382,10 @@ export async function render(container) {
           lines.push(`${section.title} ${weightPart} ${repsPart} ${planPart}`.trim());
         }
       } else if (section.kind === "metcon") {
-        lines.push(state.plan);
+        const hasLevels = state.levels.length > 0;
+        const chosen = hasLevels ? state.levels[state.levelIndex] : null;
+        lines.push(chosen ? chosen.plan : state.plan);
+        if (chosen) lines.push(`档位：${chosen.name}`);
         if (state.modText) lines.push(`改动：${state.modText}`);
         if (state.resultText) lines.push(`成绩：${state.resultText}`);
       } else if (state.freeText) {
@@ -425,12 +490,17 @@ export async function render(container) {
 
   // ---------- 约课提醒（SPEC.md §7） ----------
 
-  async function maybeOfferBooking(wodDay) {
+  async function maybeOfferBooking(wodDay, classTime) {
     const nextWeekDay = addDays(wodDay, 7);
     const weekdayLabel = WEEKDAY_LABELS[(parseDateStr(nextWeekDay).getDay() + 6) % 7];
     if (!confirm(`要约下周${weekdayLabel}的课吗？`)) return;
-    const time = prompt("几点上课？（比如 5:30 PM——wodify-pull 目前没同步具体时间，需要手填一次）");
-    if (!time) return;
+    // 有真实拉到的上课时间就直接用，不用户再手填一遍；schedule 里确实没有
+    // 这个 program 当天时段数据时才退回手填（老数据/极少数情况）
+    let time = classTime ? formatTimeOfDay(classTime) : null;
+    if (!time) {
+      time = prompt("几点上课？（这个 WOD 没有同步到具体时间，需要手填一次，比如 5:30 PM）");
+      if (!time) return;
+    }
     const classType = titleInput.value.trim() || "训练";
     await addTodo({ title: `约 周${weekdayLabel} ${time} 的${classType}`, day: addDays(nextWeekDay, -1) });
   }
@@ -445,6 +515,7 @@ export async function render(container) {
 
     const fromWod = activeWod;
     const wodDay = fromWod ? fromWod.day : null;
+    const wodClassTime = selectedClassTime;
     const bodyText = fromWod ? composeFromSections() : bodyInput.value.trim();
     if (!bodyText) return;
 
@@ -475,7 +546,7 @@ export async function render(container) {
     resetForm();
     await paintHistory();
     if (hits.length > 0) alert(`已保存，自动解锁了 ${hits.length} 个动作`);
-    if (fromWod) await maybeOfferBooking(wodDay);
+    if (fromWod) await maybeOfferBooking(wodDay, wodClassTime);
   });
 
   paintDayPicker();

@@ -45,6 +45,11 @@
                 "MeasureRepScheme": "", "Comment": "Barbell: 95/65lb (43/30kg)"
               },
               {
+                "Id": "6b", "IsSection": false, "Name": "[Business Time: Levels]",
+                "Description": "<p>Level 2:</p><p>7 rounds for reps</p><p>Barbell: 75/55lb (34/25kg)</p><p>Masters 55+:</p><p>5 rounds for reps</p>",
+                "MeasureRepScheme": "", "Comment": ""
+              },
+              {
                 "Id": "7", "IsSection": true, "Name": "PRVN RESET",
                 "Comment": "", "Description": "", "MeasureRepScheme": "For Quality"
               },

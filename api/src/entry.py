@@ -64,8 +64,11 @@ def verify_sync_token(request: Request, env=Depends(get_env)) -> None:
 class WodRow(BaseModel):
     day: str
     class_type: str
+    title: str = ""
     sections: list
     raw: dict
+    source: str = "wodify_api"
+    class_times: list[str] = []
 
 
 class ErrorReport(BaseModel):
