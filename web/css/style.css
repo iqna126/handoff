@@ -787,6 +787,34 @@ button.linklike {
   font-family: var(--font-mono);
 }
 
+.pr-scan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--rl);
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.pr-scan-row__name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pr-scan-row__vals {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--ink-faint);
+}
+
+.pr-scan-row__vals strong {
+  color: var(--sage-deep);
+}
+
 .unit-toggle {
   background: var(--card);
   border: 1px solid var(--rule);

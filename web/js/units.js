@@ -30,3 +30,18 @@ export function fromDisplay(value, unit) {
   if (Number.isNaN(n)) return null;
   return unit === "kg" ? n : lbToKg(n);
 }
+
+const WEIGHT_TEXT_RE = /(\d+(?:\.\d+)?)\s*\/\s*\d+(?:\.\d+)?\s*(lbs?|kg)|(\d+(?:\.\d+)?)\s*(lbs?|kg)/i;
+
+// 从训练记录里抓出来的自由文本重量（skillmatch.js 的 weightOfLine 那种
+// "225lbs"/"315/225lbs"）解析成 kg，供 PR 扫描比大小用。"X/Y unit" 这种
+// Rx/scaled 双档只取前一个（更重的那个，通常是 Rx 处方重量）——比大小要的
+// 是"做到过的最大重量"，不是随便挑一个数字。解析不出来返回 null。
+export function parseWeightTextToKg(weightText) {
+  const m = (weightText || "").match(WEIGHT_TEXT_RE);
+  if (!m) return null;
+  const value = parseFloat(m[1] ?? m[3]);
+  const unit = (m[2] ?? m[4] ?? "").toLowerCase();
+  if (Number.isNaN(value)) return null;
+  return unit.startsWith("lb") ? lbToKg(value) : value;
+}

@@ -1,10 +1,15 @@
-// 从训练记录里识别做过的动作 → 自动解锁技能树（SPEC.md §6.3）。照抄老版
-// 单文件 App 的同一份逻辑（docs 分支 reference/js/skillmatch.js）。
+// 从训练记录里识别做过的动作 → 自动解锁技能树（SPEC.md §6.3）、给 PR 墙
+// 扫描找纪录（SPEC.md §5.1）。照抄老版单文件 App 的同一份逻辑（docs 分支
+// reference/js/skillmatch.js）。
 //
-// 两个关键设计：
+// 三个关键设计：
 // 1. 长名优先匹配，避免 "Squat" 抢了 "Front Squat"
 // 2. 有"排除词"守卫——热身里的 "5 Back Squats (Empty Bar)"、
 //    "Scapular Pull-Ups"、":20 Squat Hold" 这些不算真做了这个动作
+// 3. 同一个动作在同一条记录里出现多次时（比如力量段一组一组重量递增），
+//    取重量最大的那一次，不是第一次——PR 扫描要的是"做到过的最大重量"，
+//    第一行往往是热身/最轻的一组，只取第一次会系统性漏掉真正的 PR
+import { parseWeightTextToKg } from "./units.js";
 
 const GUARD =
   /(empty bar|banded|scapular|kip swing|build to|build pace|rehearse|prep|warm[\s-]*up|hold\b|stretch|pausing|pause|drill|practice|tempo hold|negative|assisted|partner|light load|focus on|suggested loading|%\s*of\b|1rm|cardio choice|bootstrap|toe touch|scorpion|arm swing|pull-apart|pull apart)/i;
@@ -104,8 +109,9 @@ function weightOfLine(line) {
   return m ? m[0].trim() : "";
 }
 
-// 从整段训练文本识别做过的动作，返回 [{ key, line, weightText }]——
-// 同一个动作只报一次，取第一次出现
+// 从整段训练文本识别做过的动作，返回 [{ key, line, weightText }]——同一个
+// 动作出现多次时，保留重量能解析出来、且更大的那一次；两次都解析不出重量
+// （纯体操类动作，没有重量这回事）就还是保留第一次出现的那行
 export function matchSkills(text) {
   const found = {};
   let blockWeight = "";
@@ -134,7 +140,16 @@ export function matchSkills(text) {
     }
     const w = weightOfLine(line) || blockWeight;
     hitKeys.forEach((key) => {
-      if (!found[key]) found[key] = { key, line, weightText: w };
+      const prev = found[key];
+      if (!prev) {
+        found[key] = { key, line, weightText: w };
+        return;
+      }
+      const prevKg = parseWeightTextToKg(prev.weightText);
+      const thisKg = parseWeightTextToKg(w);
+      if (thisKg != null && (prevKg == null || thisKg > prevKg)) {
+        found[key] = { key, line, weightText: w };
+      }
     });
   });
   return Object.values(found);

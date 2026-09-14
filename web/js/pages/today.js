@@ -4,6 +4,7 @@
 import { renderWeekGrid, renderMonthGrid } from "../calendar.js";
 import { todayStr, formatMonthTitle, addDays, addMonths } from "../dateutils.js";
 import { listTodos, setTodoDone, listWorkoutsForDay, listIdeasForDay } from "../data.js";
+import { showAlert } from "../dialog.js";
 
 export async function render(container) {
   let mode = "week"; // "week" | "month"
@@ -135,8 +136,19 @@ function renderTodoCheckRow(todo, onChange) {
   checkbox.type = "checkbox";
   checkbox.checked = todo.done;
   checkbox.addEventListener("change", async () => {
-    await setTodoDone(todo.id, checkbox.checked);
-    await onChange();
+    const next = checkbox.checked;
+    checkbox.disabled = true;
+    try {
+      await setTodoDone(todo.id, next);
+      await onChange();
+    } catch (err) {
+      // 写失败不吭声的话，用户会看到"勾上了"但下次打开其实没存住——见
+      // data.js 里 run() 的说明。这里把 checkbox 复位回写之前的状态，
+      // 让界面跟数据库保持一致，而不是让一个假的勾选状态留在屏幕上
+      checkbox.checked = !next;
+      checkbox.disabled = false;
+      await showAlert(`保存失败：${err.message}`);
+    }
   });
 
   const label = document.createElement("span");

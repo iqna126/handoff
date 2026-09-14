@@ -5,11 +5,11 @@
 // "临时换算看一眼"，点了不改全局默认——用户明确反馈过，在这点一下 KG
 // 会把设置里的默认单位也带着改掉，很意外。只有设置页自己才能改默认单位。
 //
-// 老版单文件 App 里有一个"从训练记录扫描 PR"的功能（§5.1），这里先不做——
-// 它依赖训练记录里能解析出结构化的动作+重量，而训练记录编辑器/自动同步
-// 三步流程这两条路径都还没做，扫描无源可扫，等那部分做完再回来接上。
-import { listPRs, upsertPR, deletePR, getUnitPref } from "../data.js";
+// 从训练记录扫描 PR（§5.1）：扫全部训练记录，找出比当前 PR 更重的成绩，
+// 列出来问要不要批量更新——不需要用户重复手填，正常记录训练时 PR 自己浮出来。
+import { listPRs, upsertPR, deletePR, getUnitPref, listAllWorkouts } from "../data.js";
 import { toDisplay, fromDisplay, formatWeight, kgToLb } from "../units.js";
+import { scanWorkoutsForPRs } from "../prscan.js";
 import { showConfirm, showAlert } from "../dialog.js";
 
 const PCTS = [50, 60, 70, 75, 80, 85, 90, 95, 100, 105];
@@ -35,6 +35,8 @@ export async function render(container) {
           <span class="${unit === "lb" ? "on" : ""}">LB</span> / <span class="${unit === "kg" ? "on" : ""}">KG</span>
         </button>
       </div>
+      <button type="button" class="btn ghost" data-scan style="width:100%;margin-bottom:10px">扫描训练记录找 PR</button>
+      <p class="empty-hint" data-scan-hint hidden style="margin:0 0 10px"></p>
       <div class="pr-grid"></div>
     `;
     const grid = container.querySelector(".pr-grid");
@@ -56,6 +58,78 @@ export async function render(container) {
     container.querySelector("[data-unit-toggle]").addEventListener("click", () => {
       unit = unit === "kg" ? "lb" : "kg";
       paintList();
+    });
+    container.querySelector("[data-scan]").addEventListener("click", runScan);
+  }
+
+  // 扫描训练记录找 PR（SPEC.md §5.1）：找到比当前记录更重的，列出来问要不要
+  // 批量更新；没找到更高的就在原地提示一行字，不弹窗打断——用户大概率是
+  // 随手点一下看看，不是每次都真的期待有新 PR。
+  async function runScan() {
+    const scanBtn = container.querySelector("[data-scan]");
+    const hint = container.querySelector("[data-scan-hint]");
+    scanBtn.disabled = true;
+    hint.hidden = true;
+    try {
+      const workouts = await listAllWorkouts();
+      const found = scanWorkoutsForPRs(
+        workouts,
+        catalog.PR_LIST.map((p) => p.k),
+      );
+      const map = prMap();
+      const candidates = catalog.PR_LIST.filter((p) => {
+        const hit = found[p.k];
+        if (!hit) return false;
+        const current = map[p.k];
+        return !current || hit.kg > current.kg;
+      }).map((p) => ({ meta: p, hit: found[p.k], current: map[p.k] || null }));
+
+      if (candidates.length === 0) {
+        hint.hidden = false;
+        hint.textContent = "没找到更高的重量";
+        return;
+      }
+      paintScanResults(candidates);
+    } finally {
+      scanBtn.disabled = false;
+    }
+  }
+
+  function paintScanResults(candidates) {
+    const checked = new Set(candidates.map((c) => c.meta.k));
+    container.innerHTML = `
+      <button type="button" class="back-btn" data-back>‹ PR 墙</button>
+      <h1 class="display sm" style="margin:10px 0">扫描到 ${candidates.length} 项新纪录</h1>
+      <div class="pr-scan-list"></div>
+      <button type="button" class="btn" data-confirm style="width:100%;margin-top:14px">确认更新选中项</button>
+    `;
+    const list = container.querySelector(".pr-scan-list");
+    list.innerHTML = candidates
+      .map((c) => {
+        const oldVal = c.current ? toDisplay(c.current.kg, unit) : "—";
+        const newVal = toDisplay(c.hit.kg, unit);
+        return `<label class="pr-scan-row">
+          <input type="checkbox" data-scan-check="${c.meta.k}" checked />
+          <span class="pr-scan-row__name">${c.meta.n}</span>
+          <span class="pr-scan-row__vals">${oldVal} → <strong>${newVal}</strong> ${unit}</span>
+        </label>`;
+      })
+      .join("");
+    list.querySelectorAll("[data-scan-check]").forEach((box) => {
+      box.addEventListener("change", () => {
+        if (box.checked) checked.add(box.dataset.scanCheck);
+        else checked.delete(box.dataset.scanCheck);
+      });
+    });
+    container.querySelector("[data-back]").addEventListener("click", paintList);
+    container.querySelector("[data-confirm]").addEventListener("click", async () => {
+      const toApply = candidates.filter((c) => checked.has(c.meta.k));
+      for (const c of toApply) {
+        await upsertPR(c.meta.k, c.hit.kg);
+      }
+      prs = await listPRs();
+      paintList();
+      await showAlert(toApply.length ? `已更新 ${toApply.length} 项 🎉` : "没有选中任何项");
     });
   }
 
