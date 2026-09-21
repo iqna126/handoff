@@ -101,7 +101,11 @@ async def send_alert(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
-                "from": "handoff-alerts@resend.dev",
+                # 没验证自己域名的 Resend 账号只认这一个固定的沙盒发件地址——
+                # 用别的 @resend.dev 地址（比如之前写的 handoff-alerts@resend.dev）
+                # 会被 Resend 直接拒绝，而且这个拒绝在这里只会记日志、不会往上抛，
+                # 邮件发不出去但看起来什么都没出错，真机测试时踩过这个坑
+                "from": "Handoff Alerts <onboarding@resend.dev>",
                 "to": [alert_email],
                 "subject": subject,
                 "text": body,
