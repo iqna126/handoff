@@ -13,7 +13,9 @@
   // RESEND_API_KEY/SUPABASE_SERVICE_KEY/WODIFY_SYNC_TOKEN 这些真密钥
   // 绝不能写在这里，只能用 `wrangler secret put`（见 CLAUDE.md 密钥清单）
   "vars": {
-    "ALERT_EMAIL": "irisssaq@gmail.com",
+    // Resend 沙盒账号大概率只允许发给注册 Resend 时用的那个邮箱，跟这里填
+    // 的地址是否一致直接决定告警邮件发不发得出去——改这个值时留意一下
+    "ALERT_EMAIL": "iqna0126@gmail.com",
   },
   "triggers": {
     // 独立存活校验（DESIGN.md §6.6）。Cloudflare Cron Trigger 只认 UTC，不会跟着
