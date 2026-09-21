@@ -8,6 +8,7 @@ import * as timer from "./tools/timer.js";
 import * as pr from "./pr.js";
 import * as skills from "./skills.js";
 import * as settings from "./settings.js";
+import * as dataPage from "./data.js";
 
 const SUB_PAGES = {
   "tools/calc": { title: "配重计算", render: calculator.render },
@@ -15,6 +16,7 @@ const SUB_PAGES = {
   pr: { title: "PR 墙", render: pr.render },
   skills: { title: "技能树", render: skills.render },
   settings: { title: "设置", render: settings.render },
+  data: { title: "数据管理", render: dataPage.render },
 };
 
 export async function render(container, sub) {
@@ -73,6 +75,14 @@ export async function render(container, sub) {
     <div class="entry-list card" style="padding:4px 12px">
       <button type="button" class="entry-row" data-nav="settings">
         <span>设置</span>
+        <span class="entry-row__hint">›</span>
+      </button>
+    </div>
+
+    <h2>数据</h2>
+    <div class="entry-list card" style="padding:4px 12px">
+      <button type="button" class="entry-row" data-nav="data">
+        <span>清空数据</span>
         <span class="entry-row__hint">›</span>
       </button>
     </div>
