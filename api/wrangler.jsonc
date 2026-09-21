@@ -9,6 +9,12 @@
   "observability": {
     "enabled": true,
   },
+  // ALERT_EMAIL 不是密钥（就是个收告警邮件的地址），进仓库没问题——
+  // RESEND_API_KEY/SUPABASE_SERVICE_KEY/WODIFY_SYNC_TOKEN 这些真密钥
+  // 绝不能写在这里，只能用 `wrangler secret put`（见 CLAUDE.md 密钥清单）
+  "vars": {
+    "ALERT_EMAIL": "irisssaq@gmail.com",
+  },
   "triggers": {
     // 独立存活校验（DESIGN.md §6.6），时间是随手定的 UTC 时间，等实际知道场馆
     // 时区和最早课程时间了再调——目标是留出人工处理的缓冲，不是刚好卡点
