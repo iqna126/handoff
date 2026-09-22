@@ -38,6 +38,16 @@ import {
   WEEKDAY_LABELS,
 } from "../dateutils.js";
 
+// 计划写的是"4 Reps @ 70%"这种明确数字时，次数其实是教练定死的，不是
+// 用户要填的信息——只有重量是用户自己要算/要写的。次数框预填这个数字，
+// 省得每组都要跟着计划抄一遍；真的少做/多做了（比如力竭掉了一次）用户
+// 自己改。计划写的是"3-5 Reps"这种范围、或者没有数字（比如"AMRAP"）时，
+// 教练没有定死具体次数，不猜，留空跟以前一样手填。
+function repsFromPlan(planText) {
+  const m = (planText || "").match(/^(\d+)\s*reps?\b/i);
+  return m ? m[1] : "";
+}
+
 // 力量段：按"Set N: ..."这个模式自动预生成对应组数；识别不到就看 score
 // 里有没有"(N Sets)"，再没有就默认 3 组（SPEC.md §4.2 步骤②）
 function buildSetRows(section) {
@@ -46,13 +56,15 @@ function buildSetRows(section) {
   if (setLines.length > 0) {
     return setLines.map((l) => {
       const m = l.match(/^Set\s+(\d+):\s*(.*)$/i);
-      return { n: Number(m[1]), plan: m[2].trim(), weight: "", reps: "" };
+      const plan = m[2].trim();
+      return { n: Number(m[1]), plan, weight: "", reps: repsFromPlan(plan) };
     });
   }
   const scoreMatch = (section.score || "").match(/(\d+)\s*sets?/i);
   const n = scoreMatch ? Number(scoreMatch[1]) : 3;
   const planLine = lines.find((l) => l) || section.score || "";
-  return Array.from({ length: n }, (_, i) => ({ n: i + 1, plan: planLine, weight: "", reps: "" }));
+  const reps = repsFromPlan(planLine);
+  return Array.from({ length: n }, (_, i) => ({ n: i + 1, plan: planLine, weight: "", reps }));
 }
 
 function wodTitle(wod) {
@@ -379,7 +391,11 @@ export async function render(container) {
       lines.push(section.title);
       if (section.kind === "strength") {
         for (const r of state.rows) {
-          if (!r.weight && !r.reps) continue;
+          // 次数现在默认从计划里预填（见 buildSetRows/repsFromPlan），不再是
+          // "用户填过东西"的信号——一组只要没填重量，就当用户没做/没记这组，
+          // 跳过它，不能只看 reps 是否有值（默认预填的话永远有值，会导致
+          // 用户完全没碰过的行也被当成"做过"存进记录里）
+          if (!r.weight) continue;
           const weightPart = r.weight ? `${r.weight}lb` : "";
           const repsPart = r.reps ? `1x${r.reps}` : "";
           const planPart = r.plan ? `（计划：${r.plan}）` : "";
