@@ -108,6 +108,41 @@ class TestScalingLevels:
         warmup = next(s for s in r["sections"] if s["kind"] == "warmup")
         assert warmup["levels"] == []
 
+    def test_two_levels_blocks_on_the_same_metcon_both_survive(self, payload):
+        """真机数据证实过：同一个 metcon 可能有两个独立的"[Xxx: Levels]"
+        组件（比如"Ambush"这个 WOD，Level 2/Level 1/Masters 55+ 在第一个，
+        Competitor/Hotel Gym 在第二个）。之前 _attach_levels 用 `=` 整个
+        覆盖 section["levels"]，第二个组件处理时会把第一个组件解析出的
+        档位全部冲掉——用户在 App 里点开这个 WOD，Level 2/Level 1 直接
+        消失，界面上只剩最后处理的那几档，且不报错。这个测试插入第二个
+        Levels 组件，确认两边的档位都保留下来，不是后一个吃掉前一个。
+        """
+        components = payload["data"]["Response"]["ResponseWOD"]["ResponseWorkout"][
+            "WorkoutComponents"
+        ]["List"]
+        idx = next(
+            i for i, c in enumerate(components) if c.get("Name") == "[Business Time: Levels]"
+        )
+        second_block = {
+            "Id": "6c",
+            "IsSection": False,
+            "Name": "[Business Time: Levels]",
+            "Description": "<p>Competitor:</p><p>10 rounds for reps</p><p>Barbell: 95/65lb</p>",
+            "MeasureRepScheme": "",
+            "Comment": "",
+        }
+        components.insert(idx + 1, second_block)
+
+        r = parse.parse_workout(payload)
+        metcon = next(s for s in r["sections"] if s["title"] == "Business Time")
+        names = [lv["name"] for lv in metcon["levels"]]
+        assert names == ["RX", "Level 2", "Masters 55+", "Competitor"], (
+            "两个 Levels 组件的档位都要保留，第二个不能覆盖掉第一个解析出的结果"
+        )
+        assert len([n for n in names if n == "RX"]) == 1, (
+            "RX 只应该被补一次，不能因为两个 Levels 组件各插一份"
+        )
+
 
 class TestFieldTraps:
     def test_description_is_the_metcon_content(self, payload):

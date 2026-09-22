@@ -224,14 +224,24 @@ def _html_to_lines(blob: str) -> list[str]:
 
 
 def _attach_levels(section: dict, raw_blob: str) -> None:
-    """把"[Xxx: Levels]"这个组件的内容拆成每个档位一段，挂到 section["levels"]。
+    """把"[Xxx: Levels]"这个组件的内容拆成每个档位一段，**累加**进
+    section["levels"]（不是覆盖）。
+
+    真机数据证实过：同一个 metcon 段落可能有**两个独立的"[Xxx: Levels]"
+    组件**（比如 "Ambush" 这个 WOD，Level 2/Level 1/Masters 55+ 在第一个
+    组件里，Competitor/Hotel Gym 在第二个）——Wodify 那边为什么要拆成两块
+    不清楚，但如果这里用 `=` 整个覆盖 section["levels"]，第二个组件处理时
+    会把第一个组件解析出的档位全部冲掉，用户只能看到后处理的那几档，
+    前面的档位在界面上直接消失，还不报错。所以必须用 extend 累加。
 
     档位标题行形如 "Level 2:"、"Masters 55+:"、"Competitor:"，同一行冒号
     后面如果还有内容（比如 "RX: 21-15-9"）也算这个档位的第一行。识别不到
     任何档位标题就什么都不做——不编造结构。
 
     主 WOD 本身没有单独出现在 Levels 块里（它是 section 自己的 lines），
-    补一份 RX 档进去，方便调用方"档位列表里第一个永远是 RX"这个假设成立。
+    在"目前累计的档位里都没有 RX"时补一份进去，方便调用方"档位列表里第一
+    个永远是 RX"这个假设成立——检查的是累计列表，不是这一次新解析出的
+    levels，不然多个 Levels 组件会重复插入好几份 RX。
     """
     lines = _html_to_lines(raw_blob)
     levels: list[dict] = []
@@ -250,9 +260,9 @@ def _attach_levels(section: dict, raw_blob: str) -> None:
 
     if not levels:
         return
-    if not any(lv["name"].upper() == "RX" for lv in levels):
-        levels.insert(0, {"name": "RX", "lines": list(section["lines"])})
-    section["levels"] = levels
+    section["levels"].extend(levels)
+    if not any(lv["name"].upper() == "RX" for lv in section["levels"]):
+        section["levels"].insert(0, {"name": "RX", "lines": list(section["lines"])})
 
 
 def _lines_of(description: str, scheme: str, comment: str) -> list[str]:
