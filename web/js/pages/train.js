@@ -48,6 +48,18 @@ function repsFromPlan(planText) {
   return m ? m[1] : "";
 }
 
+// Wodify 有些"strength"段落其实是把好几个不同动作拼成一个复合动作，标题
+// 里带" + "（比如"Rope Climb + Supine Grip Bent Over Barbell Row + Dual
+// Dumbbell Hammer Curls"）——真机数据证实过：这种段落每个动作用的重量都
+// 不一样（杠铃一个重量、哑铃另一个，爬绳干脆没有重量这回事），"每组一个
+// 重量框"的表格模型是给单一动作设计的，塞进这种复合动作会把好几个不同
+// 的重量硬挤成一个数字，而且"组数"也容易算错（这种段落经常没有清晰的
+// "Set N:"或者"X Sets"能解析，只能瞎猜）。这种情况退回跟自由文本段落
+// 一样处理，原样展示计划，用户自己写清楚每个动作用了多重。
+function isSingleMovementStrength(section) {
+  return section.kind === "strength" && !section.title.includes(" + ");
+}
+
 // 力量段：按"Set N: ..."这个模式自动预生成对应组数；识别不到就看 score
 // 里有没有"(N Sets)"，再没有就默认 3 组（SPEC.md §4.2 步骤②）
 function buildSetRows(section) {
@@ -226,7 +238,7 @@ export async function render(container) {
         continue;
       }
       const checked = true; // 全部默认勾选，见模块顶部说明
-      if (section.kind === "strength") {
+      if (isSingleMovementStrength(section)) {
         sectionStates.set(section.id, { checked, rows: buildSetRows(section) });
       } else if (section.kind === "metcon") {
         // 有 scaling 档位（RX/Level 2/Masters 55+ ...）就给一个档位选择器；
@@ -315,7 +327,7 @@ export async function render(container) {
   }
 
   function paintSectionBody(body, section, state) {
-    if (section.kind === "strength") {
+    if (isSingleMovementStrength(section)) {
       body.innerHTML = `
         <table class="set-table">
           <thead><tr><th>组</th><th>计划</th><th>重量</th><th>次数</th></tr></thead>
@@ -389,7 +401,7 @@ export async function render(container) {
       const state = sectionStates.get(section.id);
       if (!state.checked) continue;
       lines.push(section.title);
-      if (section.kind === "strength") {
+      if (isSingleMovementStrength(section)) {
         for (const r of state.rows) {
           // 次数现在默认从计划里预填（见 buildSetRows/repsFromPlan），不再是
           // "用户填过东西"的信号——一组只要没填重量，就当用户没做/没记这组，
