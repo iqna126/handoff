@@ -23,6 +23,11 @@ def flagged_payload():
     return json.loads((FIXTURES / "workout_response_with_flags.json").read_text())
 
 
+@pytest.fixture
+def metcon_with_lift_words_payload():
+    return json.loads((FIXTURES / "workout_response_metcon_with_lift_words.json").read_text())
+
+
 class TestSections:
     def test_section_markers_drive_structure(self, payload):
         r = parse.parse_workout(payload)
@@ -73,6 +78,62 @@ class TestComponentTypeFlags:
         blob = "\n".join(strength["lines"])
         assert "4 Sets @ 55-60%" in blob
         assert "RPE 8" in blob
+
+
+class TestFlagBeatsTitleGuess:
+    """真机数据踩过的坑（2026-09-27）：Wodify 把"Rope Climb + Bent Over
+    Barbell Row + Dumbbell Curls"这个组件标成 IsMetcon=true，但标题里的
+    "Row"命中了 _LIFT_WORDS 的 `row(?!ing)`——旧的 _classify 顺序是先猜
+    标题关键词、猜不出来才看 flag，这个组件因此被错误分类成"strength"。
+    分类错了不是小事："strength"和"metcon"两条渲染路径完全不同，metcon
+    才支持难度分级（RX/Level 2/...）选择器——分类错了，这个本该能选
+    分级的段落直接被塞进给单一动作设计的力量组表格模型，用户根本看不到
+    分级选项。
+
+    同一份数据还暴露了第二个问题："Accessory Finisher"/"PRVN Reset"这两个
+    收尾模块跟主体内容一样被 Wodify 标成 IsMetcon=true——只按 flag 是否
+    跟当前段落一致来判断要不要另开新段落，会让它们被整段吞进主体内容里，
+    因为 flag 根本没变过。必须让标题里的强信号（辅助/收操）优先于 flag
+    一致与否来触发分段。
+    """
+
+    def test_flag_wins_over_title_lift_word_guess(self, metcon_with_lift_words_payload):
+        r = parse.parse_workout(metcon_with_lift_words_payload)
+        section = next(s for s in r["sections"] if "Rope Climb" in s["title"])
+        assert section["kind"] == "metcon", (
+            "IsMetcon=true 应该赢过标题里命中 _LIFT_WORDS 的 'Row'，不该分类成 strength"
+        )
+
+    def test_accessory_and_cooldown_still_split_despite_matching_flag(
+        self, metcon_with_lift_words_payload
+    ):
+        r = parse.parse_workout(metcon_with_lift_words_payload)
+        titles = [s["title"] for s in r["sections"]]
+        expected = [
+            "Warm-Up:",
+            "Rope Climb + Bent Over Barbell Row + Dumbbell Curls",
+            "Accessory Finisher",
+            "PRVN Reset",
+        ]
+        assert titles == expected, (
+            "Accessory Finisher/PRVN Reset 跟前一个组件的 IsMetcon 标记相同，"
+            "但标题本身是强分段信号，不该被吞进前一个段落"
+        )
+
+    def test_accessory_and_cooldown_get_the_right_kind(self, metcon_with_lift_words_payload):
+        r = parse.parse_workout(metcon_with_lift_words_payload)
+        kinds = {s["title"]: s["kind"] for s in r["sections"]}
+        assert kinds["Accessory Finisher"] == "accessory"
+        assert kinds["PRVN Reset"] == "cooldown"
+
+    def test_rope_climb_content_does_not_swallow_the_later_sections(
+        self, metcon_with_lift_words_payload
+    ):
+        r = parse.parse_workout(metcon_with_lift_words_payload)
+        rope_climb = next(s for s in r["sections"] if "Rope Climb" in s["title"])
+        blob = "\n".join(rope_climb["lines"])
+        assert "Banded Pull-Aparts" not in blob
+        assert "Lat Stretch" not in blob
 
 
 class TestScalingLevels:

@@ -10,8 +10,23 @@
 * ``MeasureRepScheme`` 是力量组的组次方案，纯文本带真实换行。
 * ``Id == "0"`` 是 OutSystems 的空记录占位符，读起来跟真数据一模一样，必须过滤。
 * ``Notes`` 是教练说明，可长达数千字符，默认不取。
-
-段落类型判定优先用标题关键词，跟粘贴解析器保持一致（见 SPEC）。
+* **段落类型判定：Wodify 自己的 IsWeightlifting/IsMetcon/IsGymnastics/IsWarmup
+  标记必须先查，标题关键词正则只能当兜底猜测，不能反过来。**
+  2026-09-27 真机数据踩过的坑：一个 IsMetcon=true 的组件，标题里带了
+  "Barbell Row"，命中了 `_LIFT_WORDS` 的关键词正则，被错误分类成
+  strength——分类错了不是小事，strength/metcon 是两条完全不同的渲染
+  路径，只有 metcon 支持难度分级（RX/Level 2/...）选择器，用户因此
+  完全看不到这个 WOD 本该有的分级选项。同一份数据还暴露一个相关问题：
+  同一个 WOD 里"主体内容"和"Accessory Finisher"/"PRVN Reset"这类收尾
+  模块，Wodify 常打同一个 IsMetcon 标记——光比较 flag 是否跟当前段落
+  一致来决定要不要新开段落是不够的，会把收尾模块整段吞掉，必须让标题
+  里的强信号（热身/收操/辅助）优先于 flag 一致与否触发分段。
+* **改完解析逻辑，光跑测试不够，要用当天真实拉到的数据跑一遍验证**，
+  测试 fixture 是照抄过去踩过的坑写的，新出现的数据形状测试覆盖不到——
+  上面这条就是先看真实数据分类错了，才照着真实数据写的回归测试，不是
+  反过来。改分类/解析这类代码，永远从真实数据核实结果开始，不要只改了
+  UI 层就以为问题解决了（这次一开始只在前端加了个"多动作退回自由文本"
+  的补丁，没有先往上游查为什么分类错了，是治标不治本）。
 """
 
 from __future__ import annotations
@@ -67,7 +82,15 @@ def _is_real(record: dict) -> bool:
     return rid is None or str(rid) != EMPTY_ID
 
 
-def _classify(title: str, scheme: str, flag_kind: str | None = None) -> str:
+def _title_kind(title: str) -> str | None:
+    """只认标题里的强结构信号（热身/收操/辅助），不猜 strength/metcon。
+
+    这三类不管 Wodify 给这个组件打没打类型标记、打的是什么标记，都应该
+    独立成段——真机数据证实过：同一个 WOD 里"Accessory Finisher"和
+    "PRVN Reset"跟主体的 metcon 内容，Wodify 自己统统标的是 IsMetcon=true
+    （它的类型标记只分"是不是力量/体操/热身"，不区分"主体内容"和
+    "辅助/收操"），靠 flag 分不出来，只有标题能分。
+    """
     t = (title or "").strip()
     if _TITLE_WARMUP.match(t):
         return "warmup"
@@ -75,16 +98,30 @@ def _classify(title: str, scheme: str, flag_kind: str | None = None) -> str:
         return "cooldown"
     if _TITLE_ACCESSORY.match(t):
         return "accessory"
-    s = scheme or ""
-    if _METCON_SCORE.search(s) or _METCON_SCORE.search(t):
-        return "metcon"
-    if _LIFT_WORDS.search(t):
-        return "strength"
-    # 标题本身给不出信号时（最常见：接续上一个组件、没有自己名字的空标题
-    # 组件），优先信 Wodify 自己打的类型标记，而不是直接落到下面写死的
-    # "metcon" 默认值——见 _kind_from_flags 的说明。
+    return None
+
+
+def _classify(title: str, scheme: str, flag_kind: str | None = None) -> str:
+    title_kind = _title_kind(title)
+    if title_kind is not None:
+        return title_kind
+    # Wodify 自己打的类型标记（IsWeightlifting/IsMetcon/IsGymnastics/IsWarmup）
+    # 比下面 _METCON_SCORE/_LIFT_WORDS 这两个自己猜的标题关键词正则更可信，
+    # 必须先查——真机数据踩过的坑：2026-09-27 "Rope Climb + Supine Grip Bent
+    # Over Barbell Row + Dual Dumbbell Hammer Curls" 这个组件 Wodify 自己标的
+    # 是 IsMetcon=true，但标题里的"Row"命中了 _LIFT_WORDS 的 `row(?!ing)`，
+    # 在旧顺序下被错误分类成"strength"——这不只是标题好不好看的问题，
+    # "strength"和"metcon"两条渲染路径完全不同：metcon 才支持难度分级
+    # （RX/Level 2/...）选择器，分类错了，这个本该能选分级的段落直接被
+    # 塞进给单一动作设计的力量组表格模型，用户根本看不到分级选项。
+    # 标题关键词正则只在 Wodify 没给这个组件打任何类型标记时才当兜底猜测用。
     if flag_kind is not None:
         return flag_kind
+    s = scheme or ""
+    if _METCON_SCORE.search(s) or _METCON_SCORE.search(title):
+        return "metcon"
+    if _LIFT_WORDS.search(title):
+        return "strength"
     return "metcon"
 
 
@@ -180,8 +217,20 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
         # IsWeightlifting=true），说明它是被塞进同一个 IsSection 标记下面
         # 的另一类真实内容，得单独另开一个段落，不能囫囵折进当前段落里
         # （见 _kind_from_flags 的说明，这是真机数据证实过的真实问题）。
+        #
+        # 光看 flag_kind 不够：同一个 WOD 里"主体内容"和"Accessory
+        # Finisher"/"PRVN Reset"这种收尾模块，Wodify 常常打的是同一个
+        # IsMetcon 标记，flag 相同不会触发另开段落，会被整段吞进主体
+        # 内容里——这种情况下标题本身的强信号（_title_kind）要优先于
+        # flag_kind 触发分段，不能因为 flag 一样就当成同一段处理。
         flag_kind = _kind_from_flags(comp)
-        if cur is None or (flag_kind is not None and flag_kind != cur["kind"]):
+        title_kind = _title_kind(name)
+        starts_new_section = (
+            cur is None
+            or (title_kind is not None and title_kind != cur["kind"])
+            or (title_kind is None and flag_kind is not None and flag_kind != cur["kind"])
+        )
+        if starts_new_section:
             cur = {
                 "id": f"s{len(sections) + 1}",
                 "kind": _classify(name, scheme, flag_kind),

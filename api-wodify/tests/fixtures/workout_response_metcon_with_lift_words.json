@@ -1,0 +1,63 @@
+{
+  "data": {
+    "Response": {
+      "ResponseWOD": {
+        "ResponseWorkout": {
+          "Name": "CrossFit - Sun, Sep 27",
+          "WorkoutComponents": {
+            "List": [
+              {
+                "Id": "1",
+                "IsSection": true,
+                "Name": "Warm-Up:",
+                "Description": "<p>2:00 Cardio Choice</p>",
+                "MeasureRepScheme": "",
+                "Comment": "",
+                "IsWarmup": false,
+                "IsGymnastics": false,
+                "IsWeightlifting": false,
+                "IsMetcon": false
+              },
+              {
+                "Id": "2",
+                "IsSection": false,
+                "Name": "Rope Climb + Bent Over Barbell Row + Dumbbell Curls",
+                "Description": "<p>Every 4:00 x 4 Sets</p><p>3 Rope Climbs</p><p>12 Barbell Rows</p><p>18 Dumbbell Curls</p>",
+                "MeasureRepScheme": "",
+                "Comment": "",
+                "IsWarmup": false,
+                "IsGymnastics": false,
+                "IsWeightlifting": false,
+                "IsMetcon": true
+              },
+              {
+                "Id": "3",
+                "IsSection": false,
+                "Name": "Accessory Finisher",
+                "Description": "<p>3 Sets: 10 Banded Pull-Aparts</p>",
+                "MeasureRepScheme": "",
+                "Comment": "",
+                "IsWarmup": false,
+                "IsGymnastics": false,
+                "IsWeightlifting": false,
+                "IsMetcon": true
+              },
+              {
+                "Id": "4",
+                "IsSection": false,
+                "Name": "PRVN Reset",
+                "Description": "<p>3 Sets: :30 Lat Stretch</p>",
+                "MeasureRepScheme": "",
+                "Comment": "",
+                "IsWarmup": false,
+                "IsGymnastics": false,
+                "IsWeightlifting": false,
+                "IsMetcon": true
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
