@@ -48,16 +48,21 @@ function repsFromPlan(planText) {
   return m ? m[1] : "";
 }
 
-// Wodify 有些"strength"段落其实是把好几个不同动作拼成一个复合动作，标题
-// 里带" + "（比如"Rope Climb + Supine Grip Bent Over Barbell Row + Dual
-// Dumbbell Hammer Curls"）——真机数据证实过：这种段落每个动作用的重量都
-// 不一样（杠铃一个重量、哑铃另一个，爬绳干脆没有重量这回事），"每组一个
-// 重量框"的表格模型是给单一动作设计的，塞进这种复合动作会把好几个不同
-// 的重量硬挤成一个数字，而且"组数"也容易算错（这种段落经常没有清晰的
-// "Set N:"或者"X Sets"能解析，只能瞎猜）。这种情况退回跟自由文本段落
-// 一样处理，原样展示计划，用户自己写清楚每个动作用了多重。
+// Wodify 有些"strength"段落标题带" + "（比如"Rope Climb + Supine Grip Bent
+// Over Barbell Row + Dual Dumbbell Hammer Curls"），真机数据证实过这种
+// 段落经常没有"Set N:"这种清晰的分组标记，"组数"只能靠 score 兜底猜——
+// 猜不出来就默认 3，"计划"列还会把同一句"Every 4:00 x 4 Sets"重复贴三遍，
+// 而且这种复合动作往往好几个器械用不同重量（杠铃一个、哑铃另一个），
+// "每组一个重量框"塞不下。
+//
+// 但标题带"+"不等于内容一定没法结构化——如果段落本身就写了清楚的
+// "Set 1: ..."/"Set 2: ..."，说明教练已经把每组的内容拆好了，这种情况
+// 表格照样好用、不该被标题里的"+"连累退回自由文本。只有真的没有
+// "Set N:"结构、又是多动作复合的情况，才需要退回自由文本让用户自己写。
 function isSingleMovementStrength(section) {
-  return section.kind === "strength" && !section.title.includes(" + ");
+  if (section.kind !== "strength") return false;
+  const hasSetLines = cleanLines(section.lines).some((l) => /^Set\s+\d+:/i.test(l));
+  return hasSetLines || !section.title.includes(" + ");
 }
 
 // 力量段：按"Set N: ..."这个模式自动预生成对应组数；识别不到就看 score
@@ -385,7 +390,13 @@ export async function render(container) {
         state.modText = e.target.value;
       });
     } else {
-      body.innerHTML = `<textarea class="section-freetext" rows="3">${state.freeText}</textarea>`;
+      // 固定 3 行是给"一两句话"那种简短备注设计的——现在多动作复合段落
+      // （isSingleMovementStrength 判定为 false 的那些）也会走到这里，
+      // 内容可能有十几行，固定 3 行会把大半内容挤到要来回滚动才能看到，
+      // 根本没法照着编辑每一行。按实际行数撑开，给个上限避免太夸张。
+      const lineCount = (state.freeText || "").split("\n").length;
+      const rows = Math.min(Math.max(lineCount, 3), 14);
+      body.innerHTML = `<textarea class="section-freetext" rows="${rows}">${state.freeText}</textarea>`;
       body.querySelector(".section-freetext").addEventListener("input", (e) => {
         state.freeText = e.target.value;
       });
