@@ -117,11 +117,6 @@ input {
   margin: 0;
 }
 
-#login .email-sent-hint {
-  color: var(--ink-faint);
-  font-size: 13px;
-}
-
 #login input {
   flex: 1;
   min-width: 0;
