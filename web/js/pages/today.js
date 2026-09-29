@@ -2,7 +2,7 @@
 // 所选日期的待办（可勾选） + 训练记录（纯展示，不可跳转） + 今天的想法
 // （纯展示，不在这里输入——输入统一去想法 tab，用户明确要求）。
 import { renderWeekGrid, renderMonthGrid } from "../calendar.js";
-import { todayStr, formatMonthTitle, addDays, addMonths } from "../dateutils.js";
+import { todayStr, formatMonthTitle, formatMonthDay, addDays, addMonths } from "../dateutils.js";
 import { listTodos, setTodoDone, listWorkoutsForDay, listIdeasForDay } from "../data.js";
 import { showAlert } from "../dialog.js";
 
@@ -81,16 +81,29 @@ export async function render(container) {
     }),
   );
 
+  // 没做完的待办不该一过当天就消失——不然"提醒"这个功能就白做了（用户明确
+  // 反馈过这个问题，具体场景是约课提醒：今天点了约下周的课，没点完成的话，
+  // 第二天应该还在提醒，直到真做完，或者这节课已经上过了）。所以选中这天，
+  // 显示的是「正好是这天的」加上「更早、还没做完、还没'过期'的」两类：
+  // - 当天的：不管做没做完都要显示（能看到自己已经勾掉的）
+  // - 更早的未完成项：结转过来继续提醒，除非 class_day 标着这节课已经上过了
+  //   （没有 class_day 的普通待办没有这个"过期"概念，一直结转到做完为止）
+  function isExpiredReminder(t) {
+    return Boolean(t.class_day) && selected > t.class_day;
+  }
+
   async function refreshDayContent() {
     const [todos, workouts] = await Promise.all([listTodos(), listWorkoutsForDay(selected)]);
-    const dayTodos = todos.filter((t) => t.day === selected);
+    const dayTodos = todos.filter(
+      (t) => t.day === selected || (t.day < selected && !t.done && !isExpiredReminder(t)),
+    );
 
     todoList.innerHTML = "";
     if (dayTodos.length === 0) {
       todoList.innerHTML = `<li class="empty-hint">这天没有待办</li>`;
     }
     for (const t of dayTodos) {
-      todoList.appendChild(renderTodoCheckRow(t, refreshDayContent));
+      todoList.appendChild(renderTodoCheckRow(t, refreshDayContent, t.day !== selected));
     }
 
     workoutBody.innerHTML = "";
@@ -128,7 +141,9 @@ export async function render(container) {
   await paintTodayIdea();
 }
 
-function renderTodoCheckRow(todo, onChange) {
+// carriedOver：true 表示这一行不是"选中这天新增的"，是更早哪天没做完、
+// 结转过来的——加个日期小标签，让用户看得出这是哪天欠下的，不是当天的
+function renderTodoCheckRow(todo, onChange, carriedOver) {
   const li = document.createElement("li");
   li.className = "todo-row";
 
@@ -156,6 +171,14 @@ function renderTodoCheckRow(todo, onChange) {
   label.textContent = todo.title;
 
   li.append(checkbox, label);
+
+  if (carriedOver) {
+    const badge = document.createElement("span");
+    badge.className = "todo-row__day";
+    badge.textContent = `${formatMonthDay(todo.day)} 未完成`;
+    li.append(badge);
+  }
+
   return li;
 }
 

@@ -542,7 +542,11 @@ export async function render(container) {
       if (!time) return;
     }
     const classType = titleInput.value.trim() || "训练";
-    await addTodo({ title: `约 周${weekdayLabel} ${time} 的${classType}`, day: addDays(nextWeekDay, -1) });
+    await addTodo({
+      title: `约 周${weekdayLabel} ${time} 的${classType}`,
+      day: addDays(nextWeekDay, -1),
+      classDay: nextWeekDay,
+    });
   }
 
   // ---------- 保存 ----------

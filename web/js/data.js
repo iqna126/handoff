@@ -66,8 +66,13 @@ export async function listTodos() {
   );
 }
 
-export async function addTodo({ title, day }) {
-  return run(() => supabase.from("todos").insert({ title, day }).select().single());
+// classDay：约课提醒专用（SPEC.md §7），指向这条提醒对应的那节课。今日 tab
+// 用它判断"这节课已经上过了，不用再结转提醒"，不传就是普通待办，永远结转
+// 到没做完为止。
+export async function addTodo({ title, day, classDay }) {
+  return run(() =>
+    supabase.from("todos").insert({ title, day, class_day: classDay || null }).select().single(),
+  );
 }
 
 export async function setTodoDone(id, done) {
