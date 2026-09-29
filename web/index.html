@@ -14,12 +14,16 @@
       <hr />
       <form id="email-form">
         <input type="email" id="email-input" placeholder="邮箱" required />
-        <button type="submit">发送验证码</button>
+        <button type="submit">发送登录链接</button>
       </form>
-      <form id="code-form" hidden>
-        <input type="text" id="code-input" placeholder="6 位验证码" required />
-        <button type="submit">验证</button>
-      </form>
+      <div id="email-sent" hidden>
+        <p>登录链接已发送到 <strong id="email-sent-to"></strong>，去邮箱点击链接即可登录。</p>
+        <p class="email-sent-hint">要在这个浏览器里打开链接才会登录。在别的浏览器、别的设备，或者手机主屏幕上的 App 里，都不会跟着登录。</p>
+        <div class="email-sent-actions">
+          <button id="email-resend" type="button">重新发送</button>
+          <button id="email-retry" type="button" class="btn-secondary">换个邮箱</button>
+        </div>
+      </div>
     </div>
 
     <div id="denied" hidden>

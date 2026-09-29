@@ -87,9 +87,39 @@ input {
   gap: 8px;
 }
 
-/* 同一个问题——email-form/code-form 互相切换显隐用的也是 hidden 属性 */
+/* 同一个问题——email-form 显隐切换用的也是 hidden 属性 */
 #login form[hidden] {
   display: none;
+}
+
+#login button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#login .email-sent-actions {
+  display: flex;
+  gap: 8px;
+}
+
+#login .email-sent-actions button {
+  flex: 1;
+}
+
+/* "换个邮箱"是次要操作，跟"重新发送"区分开 */
+#login button.btn-secondary {
+  background: transparent;
+  color: var(--sage-deep);
+  border: 1px solid var(--rule);
+}
+
+#login #email-sent p {
+  margin: 0;
+}
+
+#login .email-sent-hint {
+  color: var(--ink-faint);
+  font-size: 13px;
 }
 
 #login input {

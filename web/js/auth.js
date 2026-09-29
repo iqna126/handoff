@@ -1,4 +1,4 @@
-// Supabase 登录、会话。Google + 邮箱验证码都是 Supabase 原生支持，
+// Supabase 登录、会话。Google + 邮箱登录链接都是 Supabase 原生支持，
 // 前端调 SDK 即可，不需要自己写后端逻辑（DESIGN.md §7.1）。
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
@@ -25,20 +25,20 @@ export async function signInWithGoogle() {
   if (error) throw error;
 }
 
-// 发验证码：Supabase 内置发信，走的是邮箱验证码这条路（不是魔法链接）
-export async function sendEmailCode(email) {
-  const { error } = await supabase.auth.signInWithOtp({ email });
-  if (error) throw error;
-}
-
-export async function verifyEmailCode(email, code) {
-  const { data, error } = await supabase.auth.verifyOtp({
+// 发登录链接：Supabase 内置发信只能用默认模板，默认模板里是一个登录链接，
+// 没有 6 位验证码（要改模板得先配自己的 SMTP，记在 DESIGN.md 的 P2 里）。
+// 用户点链接回到 emailRedirectTo，supabase-js 默认会从 URL 里读出 session，
+// 登录态就自动接上了。emailRedirectTo 不传的话会退回项目的 Site URL（新项目
+// 默认是 localhost:3000），跟 Google 登录的 redirectTo 是同一个坑。
+//
+// 已知的体验代价：链接在哪个浏览器里打开，就只有那个浏览器登录上。手机上从
+// 主屏幕打开的 App、或者在另一台设备上点链接，原来那个页面不会跟着登录。
+export async function sendEmailLink(email) {
+  const { error } = await supabase.auth.signInWithOtp({
     email,
-    token: code,
-    type: "email",
+    options: { emailRedirectTo: window.location.origin },
   });
   if (error) throw error;
-  return data.session;
 }
 
 export async function signOut() {
