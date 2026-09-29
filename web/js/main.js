@@ -137,8 +137,11 @@ async function render() {
     }
   }
 
-  paint(await auth.getSession());
-  if (authError) showAlert(authError);
+  const initialSession = await auth.getSession();
+  paint(initialSession);
+  // 已经登录的人再点一次旧链接（过期或用过）也会带着错误参数回来，但他本来就
+  // 登录着、能正常用，这时再弹"链接失效"是误报——只在确实没登录上时提示
+  if (authError && !initialSession) showAlert(authError);
   // paint 里要 await supabase 自己的方法（is_allowed RPC、getSession）。
   // supabase-js 会在持有内部 auth 锁时同步执行 onAuthStateChange 回调并等它
   // 返回，回调里再 await supabase 方法会死锁——官方文档专门警告过。所以
