@@ -1,6 +1,7 @@
 // todos/ideas/workouts/wods 的读写。全部走 Supabase JS SDK 直连（不经过 handoff
 // 这个 Worker——那个 Worker 只服务 wodify-pull 的写入通道，见 DESIGN.md §6.6）。
-// RLS 保证 todos/ideas/workouts 只能碰自己的行；wods 是全 box 共享的只读表。
+// RLS 保证 todos/ideas/workouts 只能碰自己的行；wods 是全 box 共享的只读表，
+// 只有白名单账号能读（db/004_allowlist.sql）。
 import { supabase } from "./auth.js";
 
 // Supabase 的 Auth（签发 JWT）和 PostgREST（校验这里每个 .from() 读写用的 JWT）
@@ -26,6 +27,13 @@ async function runFull(queryFn) {
 
 async function run(queryFn) {
   return (await runFull(queryFn)).data;
+}
+
+// 当前账号在不在白名单里（db/004_allowlist.sql）。注册是公开的，但 wods 的
+// RLS 只放行白名单用户——这里只是让前端知道该显示 App 还是"未开通"页，
+// 真正挡住数据的是数据库那一层，前端这个判断被绕过也读不到 wods。
+export async function isAllowed() {
+  return run(() => supabase.rpc("is_allowed"));
 }
 
 // 重量单位是全局设置（我的 → 设置），不是每个页面各存一份——PR 墙和配重

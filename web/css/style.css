@@ -111,6 +111,52 @@ input {
   cursor: pointer;
 }
 
+/* ---------- 未开通页（登录了但不在白名单里）---------- */
+
+#denied {
+  max-width: 320px;
+  margin: 15vh auto 0;
+  padding: 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+
+/* 跟 #login 同一个坑：display:flex 会盖过 [hidden] 的默认 display:none */
+#denied[hidden] {
+  display: none;
+}
+
+#denied .denied-title {
+  font-weight: 600;
+  margin: 0;
+}
+
+#denied .denied-sub {
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+#denied code {
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--card);
+  word-break: break-all;
+  user-select: all;
+}
+
+#denied button {
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--r);
+  background: var(--sage);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 #status {
   text-align: center;
   color: var(--ink-faint);
