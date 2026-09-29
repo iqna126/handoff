@@ -48,46 +48,21 @@ async function render() {
 
   const authError = takeAuthErrorFromUrl();
   const auth = await import("./auth.js");
-  const { isAllowed } = await import("./data.js");
   const loginEl = document.getElementById("login");
-  const deniedEl = document.getElementById("denied");
   const appEl = document.getElementById("app");
   const emailForm = document.getElementById("email-form");
   const emailSentEl = document.getElementById("email-sent");
 
   let routerStarted = false;
-  // 白名单检查结果按 uid 缓存：token 静默刷新、切回标签页都会触发
-  // onAuthChange，同一个人不用每次都再查一遍，未开通页也不会每次都闪回
-  // "加载中…"。换了账号（先退出再登另一个）要重新查。被拒的人开通后需要
-  // 刷新页面才会重新查——未开通页上写了这一句。
-  let known = null; // { uid, allowed }，已经有结论的检查
-  let inflight = null; // { uid, promise }，正在进行的检查，启动时两次 paint 共用一个 RPC
 
-  function checkAccess(uid) {
-    if (inflight?.uid !== uid) {
-      const promise = isAllowed();
-      inflight = { uid, promise };
-      // 不管成功失败都清掉：成功的结论记在 known 里，失败的下次 paint 重查
-      promise.finally(() => {
-        if (inflight?.promise === promise) inflight = null;
-      }).catch(() => {});
-    }
-    return inflight.promise;
-  }
-
-  // 等 RPC 的这段时间里可能已经退出或换了账号，那次 paint 会自己画，
-  // 拿着旧 session 的结果就不该再往页面上写了（成功、失败两条路都要查）
-  async function isStale(uid) {
-    const current = await auth.getSession();
-    return current?.user.id !== uid;
-  }
-
-  async function paint(session) {
+  // 登录就能用整个 App——只有 wods（Wodify 同步来的课表内容）单独按
+  // is_allowed() White-list 控制读权限（见 db/004_allowlist.sql），不在这里
+  // 拦人。没有权限的账号 listWodsForDay() 会被 RLS 静默过滤成空数组，
+  // train.js 的"还没有同步到 WOD 内容，可以直接手写"这个已有的兜底提示
+  // 天然就覆盖了这个情况，不需要在登录这一层单独判断、单独提示。
+  function paint(session) {
     loginEl.hidden = !!session;
     if (!session) {
-      known = null;
-      inflight = null;
-      deniedEl.hidden = true;
       appEl.classList.remove("app--visible");
       statusEl.hidden = false;
       statusEl.textContent = "未登录";
@@ -97,35 +72,8 @@ async function render() {
       return;
     }
 
-    const uid = session.user.id;
-    if (known?.uid !== uid) {
-      appEl.classList.remove("app--visible");
-      deniedEl.hidden = true;
-      statusEl.hidden = false;
-      statusEl.textContent = "加载中…";
-      let allowed;
-      try {
-        allowed = await checkAccess(uid);
-      } catch (err) {
-        if (await isStale(uid)) return;
-        statusEl.textContent = `检查账号权限失败：${err.message}，刷新页面重试`;
-        return;
-      }
-      if (await isStale(uid)) return;
-      known = { uid, allowed };
-    }
-
-    if (!known.allowed) {
-      appEl.classList.remove("app--visible");
-      statusEl.hidden = true;
-      document.getElementById("denied-uid").textContent = uid;
-      deniedEl.hidden = false;
-      return;
-    }
-
     statusEl.hidden = true;
     statusEl.textContent = "";
-    deniedEl.hidden = true;
     appEl.classList.add("app--visible");
     // 路由只在首次登录成功时初始化一次——多次登录/token 刷新不该重新挂载，
     // 不然正在看的 tab 内容会被打断重画
@@ -142,15 +90,10 @@ async function render() {
   // 已经登录的人再点一次旧链接（过期或用过）也会带着错误参数回来，但他本来就
   // 登录着、能正常用，这时再弹"链接失效"是误报——只在确实没登录上时提示
   if (authError && !initialSession) showAlert(authError);
-  // paint 里要 await supabase 自己的方法（is_allowed RPC、getSession）。
   // supabase-js 会在持有内部 auth 锁时同步执行 onAuthStateChange 回调并等它
-  // 返回，回调里再 await supabase 方法会死锁——官方文档专门警告过。所以
-  // 推到下一个任务再画，让回调本身立刻返回。
+  // 返回，回调里再调用 supabase 自己的方法（比如后面路由页面里的查询）会
+  // 死锁——官方文档专门警告过。所以推到下一个任务再画，让回调本身立刻返回。
   auth.onAuthChange((session) => setTimeout(() => paint(session), 0));
-
-  document.getElementById("denied-signout").addEventListener("click", () => {
-    auth.signOut().catch((err) => showAlert(err.message));
-  });
 
   document.getElementById("google-btn").addEventListener("click", () => {
     auth.signInWithGoogle().catch((err) => showAlert(err.message));
