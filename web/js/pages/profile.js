@@ -3,6 +3,7 @@
 // 的子页面——用户明确要求底部 tab 只放最高频的几个。
 import { getSession, signOut } from "../auth.js";
 import { showAlert } from "../dialog.js";
+import { escapeHtml } from "../htmlclean.js";
 import * as calculator from "./tools/calculator.js";
 import * as timer from "./tools/timer.js";
 import * as pr from "./pr.js";
@@ -42,7 +43,7 @@ export async function render(container, sub) {
     <div class="profile-header">
       <div class="profile-avatar">${initial}</div>
       <div>
-        <div class="profile-name">${email || "未登录"}</div>
+        <div class="profile-name">${escapeHtml(email) || "未登录"}</div>
         <div class="profile-status">已登录</div>
       </div>
     </div>

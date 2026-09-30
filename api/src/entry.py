@@ -179,22 +179,34 @@ async def check_wods_freshness(env, *, client: httpx.AsyncClient | None = None) 
 
     不依赖常开机器自己每日校验——机器整体宕机时没法自我报告，见 DESIGN.md §6.6
     「独立存活校验」。这个函数被 Worker 的 Cron Trigger 调用（见 worker.py），
-    不依赖常开机器是否还活着。
+    不依赖常开机器是否还活着。查询本身失败（比如 Supabase 打不通）也要告警，
+    不能让这个唯一的兜底校验自己悄悄挂掉、什么都不说。
     """
     today = datetime.now(UTC).date().isoformat()
     url = f"{env.SUPABASE_URL}/rest/v1/wods?day=eq.{today}&select=id"
     owns_client = client is None
     http = client or httpx.AsyncClient()
     try:
-        resp = await http.get(
-            url,
-            headers={
-                "apikey": env.SUPABASE_SERVICE_KEY,
-                "Authorization": f"Bearer {env.SUPABASE_SERVICE_KEY}",
-            },
-        )
-        resp.raise_for_status()
-        rows = resp.json()
+        try:
+            resp = await http.get(
+                url,
+                headers={
+                    "apikey": env.SUPABASE_SERVICE_KEY,
+                    "Authorization": f"Bearer {env.SUPABASE_SERVICE_KEY}",
+                },
+            )
+            resp.raise_for_status()
+            rows = resp.json()
+        except httpx.HTTPError as exc:
+            logger.error("wods 存活校验自身失败：%s", exc)
+            await send_alert(
+                env,
+                "wodify-pull 存活校验：校验本身失败",
+                f"查询 {today} 的 wods 表时出错：{exc}。可能是 Supabase 打不通，"
+                "需要人工确认数据是否正常。",
+                client=http,
+            )
+            return
         if not rows:
             # 复用同一个 client，不要让 send_alert 自己另开一个——
             # 之前漏传这个参数，导致测试用假 client 查完数据之后，

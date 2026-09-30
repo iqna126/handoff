@@ -237,3 +237,22 @@ class TestFreshnessCheck:
 
         asyncio.run(run())
         assert len(calls) == 1, "有数据时只该查一次，不该再发告警请求"
+
+    def test_alerts_when_query_itself_fails(self):
+        calls = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(str(request.url))
+            if "resend.com" in str(request.url):
+                return httpx.Response(200, json={"id": "abc"})
+            return httpx.Response(500, text="internal error")
+
+        async def run():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+                await check_wods_freshness(FAKE_ENV, client=c)
+
+        asyncio.run(run())
+
+        assert any("resend.com" in url for url in calls), (
+            "查询本身失败（不是查到空结果）也该告警，不能悄悄放弃"
+        )

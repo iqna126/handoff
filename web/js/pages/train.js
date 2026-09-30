@@ -26,7 +26,7 @@ import {
 import { muscleProfile } from "../muscles.js";
 import { matchSkills } from "../skillmatch.js";
 import { renderMonthGrid } from "../calendar.js";
-import { cleanLines } from "../htmlclean.js";
+import { cleanLines, escapeHtml } from "../htmlclean.js";
 import { showConfirm, showPrompt } from "../dialog.js";
 import {
   todayStr,
@@ -315,7 +315,7 @@ export async function render(container) {
       card.innerHTML = `
         <label class="section-card__head">
           <input type="checkbox" data-section-check="${section.id}" ${state.checked ? "checked" : ""} />
-          <span class="section-card__title">${section.title}</span>
+          <span class="section-card__title">${escapeHtml(section.title)}</span>
         </label>
         <div class="section-card__body" ${state.checked ? "" : "hidden"}></div>
       `;
@@ -365,7 +365,7 @@ export async function render(container) {
                 ${state.levels
                   .map(
                     (lv, i) =>
-                      `<button type="button" class="chip ${i === state.levelIndex ? "chip--active" : ""}" data-level="${i}">${lv.name}</button>`,
+                      `<button type="button" class="chip ${i === state.levelIndex ? "chip--active" : ""}" data-level="${i}">${escapeHtml(lv.name)}</button>`,
                   )
                   .join("")}
               </div>`
@@ -497,7 +497,7 @@ export async function render(container) {
     const muscles = (record.muscles || []).filter((m) => m.key !== "cardio");
     card.innerHTML = `
       <div class="train-card__head">
-        <h3>${record.title || "训练记录"}</h3>
+        <h3></h3>
         <span class="train-card__time">${formatMonthDay(record.day)}</span>
       </div>
       <pre class="train-card__body"></pre>
@@ -513,7 +513,8 @@ export async function render(container) {
       </div>
     `;
     // textContent（不是拼进 innerHTML 的字符串）：保留原文真实换行，
-    // 也不会把 body 里的尖括号当成标签解析
+    // 也不会把用户手填的内容当成标签解析
+    card.querySelector("h3").textContent = record.title || "训练记录";
     card.querySelector(".train-card__body").textContent = record.body || "";
     card.querySelector("[data-copy]").addEventListener("click", () => loadIntoForm(record, { asCopy: true }));
     card.querySelector("[data-edit]").addEventListener("click", () => loadIntoForm(record, { asCopy: false }));

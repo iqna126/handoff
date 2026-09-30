@@ -30,12 +30,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Any, Callable
 
 from . import config
 from .prime import WALK, WORKOUT_WALK_JS, date_label
+
+logger = logging.getLogger(__name__)
 
 
 class CdpUnavailableError(RuntimeError):
@@ -123,7 +126,9 @@ class CdpSession:
             try:
                 await self.call("Target.closeTarget", {"targetId": self.target_id})
             except Exception:  # noqa: BLE001 - 关闭本来就是收尾动作，失败不该盖过原始异常
-                pass
+                logger.warning(
+                    "Target.closeTarget 失败，Chrome 里可能留了个没关掉的标签页", exc_info=True
+                )
         if self._reader is not None:
             self._reader.cancel()
             self._reader = None

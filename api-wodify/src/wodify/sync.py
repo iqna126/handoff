@@ -11,6 +11,7 @@ Worker（用它自己的 service_role key），见 DESIGN.md §6.6 密钥架构�
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from datetime import date, timedelta
@@ -18,6 +19,8 @@ from typing import Any, Callable
 
 from . import parse
 from .client import Client, SessionExpired, VersionStale
+
+logger = logging.getLogger(__name__)
 
 Transport = Callable[[str, dict, bytes], tuple[int, bytes]]
 
@@ -119,8 +122,8 @@ def report_error(
         _post_json(
             ingest_url, sync_token, {"error": {"kind": kind, "detail": detail}}, transport=transport
         )
-    except (urllib.error.URLError, OSError, TimeoutError, RuntimeError):
-        pass
+    except (urllib.error.URLError, OSError, TimeoutError, RuntimeError) as exc:
+        logger.error("上报错误本身也失败了（原始错误 %s: %s）：%s", kind, detail, exc)
 
 
 def run_weekly_sync(
