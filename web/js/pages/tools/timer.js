@@ -47,7 +47,7 @@ function mmss(sec) {
 }
 
 export function render(container) {
-  const TM = {
+  const timerState = {
     rounds: 8,
     work: 20,
     rest: 10,
@@ -132,48 +132,48 @@ export function render(container) {
 
   // 只画时钟本身——运行中每 100ms 调一次，绝不碰 paramsEl 里的输入框
   function renderClock() {
-    bigEl.classList.toggle("timer-big--work", TM.phase === "work");
+    bigEl.classList.toggle("timer-big--work", timerState.phase === "work");
     phaseEl.textContent =
-      TM.phase === "work" ? "运动" : TM.phase === "rest" ? "休息" : TM.phase === "done" ? "完成" : "准备";
-    clockEl.textContent = TM.phase === "idle" ? mmss(TM.work) : TM.phase === "done" ? "00:00" : mmss(TM.left);
+      timerState.phase === "work" ? "运动" : timerState.phase === "rest" ? "休息" : timerState.phase === "done" ? "完成" : "准备";
+    clockEl.textContent = timerState.phase === "idle" ? mmss(timerState.work) : timerState.phase === "done" ? "00:00" : mmss(timerState.left);
     roundEl.textContent =
-      TM.phase === "idle" || TM.phase === "done" ? `${TM.rounds} 回合` : `第 ${TM.round} / ${TM.rounds} 回合`;
-    startBtn.textContent = TM.running ? "暂停" : TM.phase === "idle" || TM.phase === "done" ? "开始" : "继续";
+      timerState.phase === "idle" || timerState.phase === "done" ? `${timerState.rounds} 回合` : `第 ${timerState.round} / ${timerState.rounds} 回合`;
+    startBtn.textContent = timerState.running ? "暂停" : timerState.phase === "idle" || timerState.phase === "done" ? "开始" : "继续";
   }
 
   // 只在参数真的变了、或者锁定状态变了的时候调用，不受 100ms 定时器驱动
   function renderParams() {
-    if (document.activeElement !== fields.rounds) fields.rounds.value = TM.rounds;
-    if (document.activeElement !== fields.work) fields.work.value = mmss(TM.work);
-    if (document.activeElement !== fields.rest) fields.rest.value = mmss(TM.rest);
-    totalEl.textContent = `共 ${mmss(TM.rounds * (TM.work + TM.rest))}`;
-    const locked = TM.phase !== "idle" && TM.phase !== "done";
+    if (document.activeElement !== fields.rounds) fields.rounds.value = timerState.rounds;
+    if (document.activeElement !== fields.work) fields.work.value = mmss(timerState.work);
+    if (document.activeElement !== fields.rest) fields.rest.value = mmss(timerState.rest);
+    totalEl.textContent = `共 ${mmss(timerState.rounds * (timerState.work + timerState.rest))}`;
+    const locked = timerState.phase !== "idle" && timerState.phase !== "done";
     paramsEl.classList.toggle("timer-params--locked", locked);
   }
 
   function tickFn() {
-    TM.left = (TM.endAt - Date.now()) / 1000;
-    if (TM.left > 0) {
+    timerState.left = (timerState.endAt - Date.now()) / 1000;
+    if (timerState.left > 0) {
       renderClock();
       return;
     }
-    if (TM.phase === "work") {
-      if (TM.rest > 0) {
-        TM.phase = "rest";
-        TM.endAt = Date.now() + TM.rest * 1000;
+    if (timerState.phase === "work") {
+      if (timerState.rest > 0) {
+        timerState.phase = "rest";
+        timerState.endAt = Date.now() + timerState.rest * 1000;
         beep(false);
-      } else if (TM.round < TM.rounds) {
-        TM.round++;
-        TM.endAt = Date.now() + TM.work * 1000;
+      } else if (timerState.round < timerState.rounds) {
+        timerState.round++;
+        timerState.endAt = Date.now() + timerState.work * 1000;
         beep(false);
       } else {
         return finish();
       }
-    } else if (TM.phase === "rest") {
-      if (TM.round < TM.rounds) {
-        TM.round++;
-        TM.phase = "work";
-        TM.endAt = Date.now() + TM.work * 1000;
+    } else if (timerState.phase === "rest") {
+      if (timerState.round < timerState.rounds) {
+        timerState.round++;
+        timerState.phase = "work";
+        timerState.endAt = Date.now() + timerState.work * 1000;
         beep(false);
       } else {
         return finish();
@@ -183,9 +183,9 @@ export function render(container) {
   }
 
   function finish() {
-    TM.running = false;
-    TM.phase = "done";
-    TM.left = 0;
+    timerState.running = false;
+    timerState.phase = "done";
+    timerState.left = 0;
     clearInterval(tick);
     tick = null;
     beep(true);
@@ -194,33 +194,33 @@ export function render(container) {
   }
 
   function toggle() {
-    if (TM.running) {
-      TM.running = false;
+    if (timerState.running) {
+      timerState.running = false;
       clearInterval(tick);
       tick = null;
-      TM.left = (TM.endAt - Date.now()) / 1000;
+      timerState.left = (timerState.endAt - Date.now()) / 1000;
       renderClock();
       return;
     }
-    if (TM.phase === "idle" || TM.phase === "done") {
-      TM.round = 1;
-      TM.phase = "work";
-      TM.endAt = Date.now() + TM.work * 1000;
+    if (timerState.phase === "idle" || timerState.phase === "done") {
+      timerState.round = 1;
+      timerState.phase = "work";
+      timerState.endAt = Date.now() + timerState.work * 1000;
       beep(false);
     } else {
-      TM.endAt = Date.now() + TM.left * 1000; // 从暂停处续上
+      timerState.endAt = Date.now() + timerState.left * 1000; // 从暂停处续上
     }
-    TM.running = true;
+    timerState.running = true;
     tick = setInterval(tickFn, 100);
     renderClock();
     renderParams();
   }
 
   function reset() {
-    TM.running = false;
-    TM.phase = "idle";
-    TM.round = 1;
-    TM.left = 0;
+    timerState.running = false;
+    timerState.phase = "idle";
+    timerState.round = 1;
+    timerState.left = 0;
     clearInterval(tick);
     tick = null;
     renderClock();
@@ -230,7 +230,7 @@ export function render(container) {
   container.querySelectorAll("[data-step]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const [field, delta] = btn.dataset.step.split(":");
-      TM[field] = clamp(TM[field] + Number(delta), BOUNDS[field]);
+      timerState[field] = clamp(timerState[field] + Number(delta), BOUNDS[field]);
       renderParams();
     });
   });
@@ -241,7 +241,7 @@ export function render(container) {
   fields.rounds.addEventListener("keydown", (e) => e.key === "Enter" && fields.rounds.blur());
   fields.rounds.addEventListener("blur", () => {
     const n = parseIntInput(fields.rounds.value);
-    if (n != null) TM.rounds = clamp(n, BOUNDS.rounds);
+    if (n != null) timerState.rounds = clamp(n, BOUNDS.rounds);
     renderParams();
   });
 
@@ -250,7 +250,7 @@ export function render(container) {
     fields[field].addEventListener("keydown", (e) => e.key === "Enter" && fields[field].blur());
     fields[field].addEventListener("blur", () => {
       const n = parseTimeInput(fields[field].value);
-      if (n != null) TM[field] = clamp(n, BOUNDS[field]);
+      if (n != null) timerState[field] = clamp(n, BOUNDS[field]);
       renderParams();
     });
   }
@@ -262,7 +262,7 @@ export function render(container) {
   // 看不见的时候自己往下跑，回来发现好几轮已经"跑完"了。endAt 时间戳
   // 本身没有漂移问题，这里纯粹是产品行为选择：不可见就当暂停处理。
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && TM.running) toggle();
+    if (document.hidden && timerState.running) toggle();
   });
 
   renderClock();
