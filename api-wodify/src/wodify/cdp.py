@@ -33,10 +33,14 @@ import json
 import logging
 import urllib.error
 import urllib.request
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Callable
 
 from . import config
-from .prime import WALK, WORKOUT_WALK_JS, date_label
+from .client import JSONObject, JSONValue
+from .prime import WALK, WORKOUT_WALK_JS, ObservedRequest, date_label
+
+if TYPE_CHECKING:
+    from websockets import ClientConnection
 
 logger = logging.getLogger(__name__)
 
@@ -73,14 +77,14 @@ class CdpSession:
     触发的网络事件"，两者必须能并发。
     """
 
-    def __init__(self, ws):
+    def __init__(self, ws: "ClientConnection") -> None:
         self._ws = ws
         self._id = 0
         self.session_id: str | None = None
         self.target_id: str | None = None
-        self._pending: dict[int, asyncio.Future] = {}
-        self._events: asyncio.Queue = asyncio.Queue()
-        self._reader: asyncio.Task | None = None
+        self._pending: dict[int, asyncio.Future[JSONObject]] = {}
+        self._events: asyncio.Queue[JSONObject] = asyncio.Queue()
+        self._reader: asyncio.Task[None] | None = None
 
     @classmethod
     async def connect(cls, ws_url: str | None = None) -> CdpSession:
@@ -100,7 +104,7 @@ class CdpSession:
         """唯一的读取者：命令回复分给对应的 future，其它一律进事件队列。"""
         try:
             async for raw in self._ws:
-                msg = json.loads(raw)
+                msg: JSONObject = json.loads(raw)
                 mid = msg.get("id")
                 fut = self._pending.pop(mid, None) if mid is not None else None
                 if fut is not None:
@@ -137,20 +141,20 @@ class CdpSession:
     async def call(
         self,
         method: str,
-        params: dict | None = None,
+        params: JSONObject | None = None,
         *,
         on_target: bool = False,
         timeout: float = 60.0,
-    ) -> dict:
+    ) -> JSONObject:
         self._id += 1
         mid = self._id
-        msg: dict[str, Any] = {"id": mid, "method": method, "params": params or {}}
+        msg: JSONObject = {"id": mid, "method": method, "params": params or {}}
         if on_target:
             if not self.session_id:
                 raise RuntimeError(f"{method}：还没 attach 到任何页面")
             msg["sessionId"] = self.session_id
 
-        fut: asyncio.Future = asyncio.get_event_loop().create_future()
+        fut: asyncio.Future[JSONObject] = asyncio.get_event_loop().create_future()
         self._pending[mid] = fut
         await self._ws.send(json.dumps(msg))
         try:
@@ -180,7 +184,7 @@ class CdpSession:
     async def navigate(self, url: str) -> None:
         await self.call("Page.navigate", {"url": url}, on_target=True)
 
-    async def evaluate(self, expression: str, *, await_promise: bool = False) -> Any:
+    async def evaluate(self, expression: str, *, await_promise: bool = False) -> JSONValue:
         res = await self.call(
             "Runtime.evaluate",
             {"expression": expression, "returnByValue": True, "awaitPromise": await_promise},
@@ -208,7 +212,7 @@ class CdpSession:
             )
         return "; ".join(f"{n}={v}" for n, v in found.items())
 
-    async def drain(self, seconds: float, handler: Callable[[dict], None]) -> None:
+    async def drain(self, seconds: float, handler: Callable[[JSONObject], None]) -> None:
         """在 seconds 秒内，把收到的每个事件喂给 handler。
 
         从 `_pump` 填的队列里读，不直接读 socket，所以能跟 `call`/`evaluate`
@@ -227,7 +231,7 @@ class CdpSession:
             handler(event)
 
 
-def _to_observed(event: dict) -> dict | None:
+def _to_observed(event: JSONObject) -> ObservedRequest | None:
     """把一个 CDP 的 Network.requestWillBeSent 事件转成 observe_to_session() 要的形状。
 
     纯函数，可以用构造出来的事件离线测。
@@ -248,7 +252,7 @@ def _to_observed(event: dict) -> dict | None:
     return {"url": url, "headers": req.get("headers", {}), "body": body}
 
 
-async def capture(cdp_url: str, host: str, target_date: str) -> dict:
+async def capture(cdp_url: str, host: str, target_date: str) -> dict[str, object]:
     """连上一个已登录的 Chrome，走 WALK + WORKOUT_WALK_JS，收集观察到的网络请求。
 
     target_date 要选一个**还没被 OutSystems 缓存过、且确实发布了 WOD** 的日期
@@ -261,9 +265,9 @@ async def capture(cdp_url: str, host: str, target_date: str) -> dict:
     见函数末尾的说明。
     """
     session = await CdpSession.connect()
-    observed: list[dict] = []
+    observed: list[ObservedRequest] = []
 
-    def collect(event: dict) -> None:
+    def collect(event: JSONObject) -> None:
         item = _to_observed(event)
         if item is not None:
             observed.append(item)

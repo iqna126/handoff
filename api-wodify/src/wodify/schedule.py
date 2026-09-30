@@ -9,12 +9,40 @@
 from __future__ import annotations
 
 import re
+from typing import TypedDict
 
-from .parse import is_real
+from .client import JSONObject
+from .parse import ParsedWorkout, Section, is_real
 
 # workout 的 Name 字段形如 "CrossFit - Mon, Aug 24" / "CrossFit Pump & Burn - Sat, Aug 22"。
 # 课名不写死——用「英文课名 - 星期几」的通用模式，跟粘贴解析器曾用的规则同一个思路
 _CLASS_HEAD = re.compile(r"^(.+?)\s*[-–—]\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)", re.I)
+
+
+class ScheduledClass(TypedDict):
+    """某一天某一节课。id/name/start_time 可能是 None——真机数据里出现过
+    字段缺失的班级记录（见 test_tries_alternate_container_names），不编造。
+    """
+
+    id: str | None
+    name: str | None
+    start_time: str | None
+    program_id: str
+
+
+class WodRowDict(TypedDict):
+    """发给 Worker /api/wod/ingest 的一行。字段必须跟 api/src/entry.py 的
+    pydantic 模型 WodRow 保持一致——这边产出，那边校验+落库，是同一份数据
+    的两端，两个仓库结构不共享代码，改字段时两边都要对着改。
+    """
+
+    day: str
+    class_type: str
+    title: str
+    sections: list[Section]
+    raw: JSONObject
+    source: str
+    class_times: list[str]
 
 
 def class_type_from_title(title: str) -> str:
@@ -23,7 +51,7 @@ def class_type_from_title(title: str) -> str:
     return m.group(1).strip() if m else ""
 
 
-def parse_schedule(payload: dict) -> list[dict]:
+def parse_schedule(payload: JSONObject) -> list[ScheduledClass]:
     """把 GetClassList 的响应转成当天**每一节课**（不按 ProgramId 去重）。
 
     同一个 program 当天经常开好几个时段（比如 CrossFit 早 6 点、早 9 点、
@@ -48,7 +76,7 @@ def parse_schedule(payload: dict) -> list[dict]:
             break
     rows = (container or {}).get("List") or []
 
-    classes: list[dict] = []
+    classes: list[ScheduledClass] = []
     for row in rows:
         if not isinstance(row, dict) or not is_real(row):
             continue
@@ -66,13 +94,13 @@ def parse_schedule(payload: dict) -> list[dict]:
     return classes
 
 
-def distinct_programs(classes: list[dict]) -> list[dict]:
+def distinct_programs(classes: list[ScheduledClass]) -> list[ScheduledClass]:
     """从 parse_schedule() 的完整班级列表里去重出当天有哪些不同 program——
     查 workout 只需要每个 program 各查一次，不需要每节课都查一遍。
     保留每个 program 第一次出现的那条记录（含它的 id/name/start_time）。
     """
     seen: set[str] = set()
-    out: list[dict] = []
+    out: list[ScheduledClass] = []
     for c in classes:
         if c["program_id"] in seen:
             continue
@@ -81,7 +109,7 @@ def distinct_programs(classes: list[dict]) -> list[dict]:
     return out
 
 
-def class_times_for_program(classes: list[dict], program_id: str) -> list[str]:
+def class_times_for_program(classes: list[ScheduledClass], program_id: str) -> list[str]:
     """某个 program 当天开了几个时段，取全部 StartTime——约课提醒要让用户
     选具体哪个时段（同一个 program 当天可能不止一场课）。"""
     return [
@@ -89,7 +117,9 @@ def class_times_for_program(classes: list[dict], program_id: str) -> list[str]:
     ]
 
 
-def to_wod_row(day: str, parsed: dict, raw: dict, *, class_times: list[str] | None = None) -> dict:
+def to_wod_row(
+    day: str, parsed: ParsedWorkout, raw: JSONObject, *, class_times: list[str] | None = None
+) -> WodRowDict:
     """转成 wods 表的一行。原文永久保留，方便日后用更好的规则重解析。
 
     class_times：这个 program 当天开课的具体时段（可能不止一个），约课
