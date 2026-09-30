@@ -42,9 +42,11 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import urllib.request
+from typing import TypedDict
 
 from . import actions
+from .actions import ActionName
+from .client import JSONValue, PrimedAction, Session
 
 #: 先走这两个静态页面触发 schedule 等动作，Home 是可靠的入口且会顺带填充
 #: 客户端变量。（path, 等待秒数）
@@ -120,16 +122,19 @@ class PrimeError(Exception):
     pass
 
 
-def _cdp_targets(cdp_url: str) -> list[dict]:
-    with urllib.request.urlopen(f"{cdp_url}/json/list", timeout=10) as r:
-        return json.loads(r.read())
+class ObservedRequest(TypedDict):
+    """CDP 嗅探到的一条网络请求，cdp._to_observed() 产出、这里消费。"""
+
+    url: str
+    headers: dict[str, str]
+    body: JSONValue
 
 
 def observe_to_session(
-    observed: list[dict],
+    observed: list[ObservedRequest],
     *,
     host: str,
-) -> dict:
+) -> Session:
     """把嗅探到的请求列表整理成 session 缓存。
 
     这一步是纯函数，可以离线测试 —— 真正跑 CDP 抓包的部分还没实现（见模块顶部说明）。
@@ -144,7 +149,7 @@ def observe_to_session(
     所以匹配失败时必须**明确报出来**，不能静默跳过。
     """
     want = dict(actions.ACTIONS)
-    got: dict[str, dict] = {}
+    got: dict[ActionName, PrimedAction] = {}
     unmatched: list[str] = []
     # 只从真正匹配上白名单的请求里取 cookie/csrf——不相关的请求（埋点、
     # 未登记的 action）混进来的话，会静默把凭证换成错的，之后每次查询都 401
@@ -184,7 +189,7 @@ def observe_to_session(
     }
 
 
-def report(session: dict) -> str:
+def report(session: Session) -> str:
     """人可读的 prime 结果。missing 不为空时必须让人看见。"""
     lines = [
         f"host      {session.get('host')}",
@@ -203,7 +208,7 @@ def report(session: dict) -> str:
     return "\n".join(lines)
 
 
-def save_session(session: dict, path: str) -> None:
+def save_session(session: Session, path: str) -> None:
     """存到本地文件。里面是活的凭证（cookie/csrf），权限收紧到只有自己能读。"""
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w") as f:
@@ -211,7 +216,7 @@ def save_session(session: dict, path: str) -> None:
     os.chmod(path, 0o600)
 
 
-def load_session(path: str) -> dict:
+def load_session(path: str) -> Session:
     """读本地缓存的 session。没有就抛 FileNotFoundError——调用方决定怎么提示用户去 prime。"""
     with open(path) as f:
         return json.load(f)

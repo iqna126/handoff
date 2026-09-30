@@ -20,9 +20,34 @@ import gzip
 import json
 import urllib.error
 import urllib.request
-from typing import Any, Callable
+from typing import Callable, TypedDict
 
 from . import actions
+from .actions import ActionName
+
+# Wodify/CDP 协议本身没有 schema，请求体/响应体都是任意嵌套的 JSON——
+# 这是唯一诚实的类型，不是偷懒用 Any。
+JSONValue = dict[str, "JSONValue"] | list["JSONValue"] | str | int | float | bool | None
+JSONObject = dict[str, JSONValue]
+
+
+class PrimedAction(TypedDict):
+    """prime 时嗅探到的某个动作的请求模板（prime.observe_to_session() 产出）。"""
+
+    path: str
+    body: JSONValue
+
+
+class Session(TypedDict):
+    """prime 抓到、缓存到磁盘、Client 用来发请求的会话凭证 + 请求体模板。"""
+
+    host: str
+    cookie: str
+    csrf: str
+    actions: dict[ActionName, PrimedAction]
+    captured: list[ActionName]
+    missing: list[ActionName]
+    unmatched_paths: list[str]
 
 
 class NotPrimed(Exception):
@@ -42,7 +67,7 @@ class VersionStale(Exception):
 # --------------------------------------------------------------------------
 
 
-def set_field(body: Any, key: str, value: Any) -> int:
+def set_field(body: JSONValue, key: str, value: str) -> int:
     """把 body 里**所有**名为 key 的叶子改成 value，返回改了几处。
 
     只改已存在的键，永不新增 —— 新增会让 Wodify 返回 400。
@@ -63,7 +88,7 @@ def set_field(body: Any, key: str, value: Any) -> int:
     return count
 
 
-def require_field(body: Any, key: str, value: Any) -> None:
+def require_field(body: JSONValue, key: str, value: str) -> None:
     """set_field 的严格版：一处都没改到就抛异常。"""
     n = set_field(body, key, value)
     if n == 0:
@@ -75,7 +100,7 @@ def require_field(body: Any, key: str, value: Any) -> None:
 # --------------------------------------------------------------------------
 
 
-def check_fresh(action_name: str, payload: dict) -> None:
+def check_fresh(action_name: ActionName, payload: JSONObject) -> None:
     """响应自带版本标记。任一为真就说明缓存过期。
 
     宁可抛异常，也不返回看起来合理的数据。
@@ -96,7 +121,7 @@ def check_fresh(action_name: str, payload: dict) -> None:
 # 硬编码统一改 SelectedDate 会导致 schedule 查询直接 NotPrimed）。
 # schedule 的 ToDate 保持原样不动：真机抓到的模板里 ToDate 是个固定哨兵值
 # （"1900-01-01"），跟请求的是哪一天无关，照抄行为，不去猜它该改成什么。
-_DATE_FIELD_BY_ACTION = {
+_DATE_FIELD_BY_ACTION: dict[ActionName, str] = {
     "schedule": "FromDate",
 }
 _DEFAULT_DATE_FIELD = "SelectedDate"
@@ -107,7 +132,7 @@ _DEFAULT_DATE_FIELD = "SelectedDate"
 # --------------------------------------------------------------------------
 
 
-def _default_transport(url: str, headers: dict, body: bytes) -> tuple[int, bytes]:
+def _default_transport(url: str, headers: dict[str, str], body: bytes) -> tuple[int, bytes]:
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -133,9 +158,9 @@ class Client:
     def __init__(
         self,
         host: str,
-        session: dict,
-        transport: Callable[[str, dict, bytes], tuple[int, bytes]] | None = None,
-    ):
+        session: Session,
+        transport: Callable[[str, dict[str, str], bytes], tuple[int, bytes]] | None = None,
+    ) -> None:
         self.host = host
         self.session = session
         self.transport = transport or _default_transport
@@ -144,8 +169,8 @@ class Client:
         return f"https://{self.host}/WodifyClient/screenservices/{path}"
 
     def query(
-        self, action_name: str, *, date: str | None = None, program_id: str | None = None
-    ) -> dict:
+        self, action_name: ActionName, *, date: str | None = None, program_id: str | None = None
+    ) -> JSONObject:
         path = actions.resolve(action_name)
 
         primed = (self.session.get("actions") or {}).get(action_name)
