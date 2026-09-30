@@ -12,6 +12,7 @@ Workers 的入口桥接在 worker.py，那边导入了只在 Workers/Pyodide 沙
 
 import hmac
 import logging
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 import httpx
@@ -81,6 +82,24 @@ class IngestRequest(BaseModel):
     error: ErrorReport | None = None
 
 
+@asynccontextmanager
+async def _client_or(client: httpx.AsyncClient | None):
+    """复用调用方传入的 client；没传就自己开一个，用完自己关。
+
+    send_alert/upsert_wods/check_wods_freshness 三个函数都要支持"串用同一个
+    client 调"（check_wods_freshness 靠这个才能让 send_alert 走同一条连接，
+    见那边的说明），之前是各写一份 owns_client/try/finally，抽出来避免每加
+    一个新调用点就要再抄一遍。
+    """
+    owns_client = client is None
+    c = client or httpx.AsyncClient()
+    try:
+        yield c
+    finally:
+        if owns_client:
+            await c.aclose()
+
+
 async def send_alert(
     env, subject: str, body: str, *, client: httpx.AsyncClient | None = None
 ) -> None:
@@ -94,10 +113,8 @@ async def send_alert(
     if not api_key or not alert_email:
         logger.error("RESEND_API_KEY/ALERT_EMAIL 没配置，告警发不出去：%s", subject)
         return
-    owns_client = client is None
-    client = client or httpx.AsyncClient()
-    try:
-        resp = await client.post(
+    async with _client_or(client) as c:
+        resp = await c.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
@@ -113,9 +130,6 @@ async def send_alert(
         )
         if resp.status_code >= 400:
             logger.error("Resend 告警发送失败：%s %s", resp.status_code, resp.text)
-    finally:
-        if owns_client:
-            await client.aclose()
 
 
 async def upsert_wods(env, wods: list[WodRow], *, client: httpx.AsyncClient | None = None) -> int:
@@ -127,10 +141,8 @@ async def upsert_wods(env, wods: list[WodRow], *, client: httpx.AsyncClient | No
         return 0
     url = f"{env.SUPABASE_URL}/rest/v1/wods?on_conflict=day,class_type"
     payload = [w.model_dump() for w in wods]
-    owns_client = client is None
-    client = client or httpx.AsyncClient()
-    try:
-        resp = await client.post(
+    async with _client_or(client) as c:
+        resp = await c.post(
             url,
             headers={
                 "apikey": env.SUPABASE_SERVICE_KEY,
@@ -141,9 +153,6 @@ async def upsert_wods(env, wods: list[WodRow], *, client: httpx.AsyncClient | No
             json=payload,
         )
         resp.raise_for_status()
-    finally:
-        if owns_client:
-            await client.aclose()
     return len(wods)
 
 
@@ -184,11 +193,9 @@ async def check_wods_freshness(env, *, client: httpx.AsyncClient | None = None) 
     """
     today = datetime.now(UTC).date().isoformat()
     url = f"{env.SUPABASE_URL}/rest/v1/wods?day=eq.{today}&select=id"
-    owns_client = client is None
-    http = client or httpx.AsyncClient()
-    try:
+    async with _client_or(client) as c:
         try:
-            resp = await http.get(
+            resp = await c.get(
                 url,
                 headers={
                     "apikey": env.SUPABASE_SERVICE_KEY,
@@ -204,7 +211,7 @@ async def check_wods_freshness(env, *, client: httpx.AsyncClient | None = None) 
                 "wodify-pull 存活校验：校验本身失败",
                 f"查询 {today} 的 wods 表时出错：{exc}。可能是 Supabase 打不通，"
                 "需要人工确认数据是否正常。",
-                client=http,
+                client=c,
             )
             return
         if not rows:
@@ -216,8 +223,5 @@ async def check_wods_freshness(env, *, client: httpx.AsyncClient | None = None) 
                 "wodify-pull 存活校验：今天没有 WOD 数据",
                 f"{today} 的 wods 表是空的。可能是常开机器整体失联，也可能是场馆当天"
                 "确实没有排课——不确定就都发一封，让人来判断，不在这里猜原因。",
-                client=http,
+                client=c,
             )
-    finally:
-        if owns_client:
-            await http.aclose()
