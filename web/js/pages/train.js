@@ -25,18 +25,10 @@ import {
 } from "../data.js";
 import { muscleProfile } from "../muscles.js";
 import { matchSkills } from "../skillmatch.js";
-import { renderMonthGrid } from "../calendar.js";
+import { createDatePicker } from "../datepicker.js";
 import { cleanLines, escapeHtml } from "../htmlclean.js";
 import { showConfirm, showPrompt } from "../dialog.js";
-import {
-  todayStr,
-  formatMonthDay,
-  formatMonthTitle,
-  addMonths,
-  addDays,
-  parseDateStr,
-  WEEKDAY_LABELS,
-} from "../dateutils.js";
+import { todayStr, formatMonthDay, addDays, parseDateStr, WEEKDAY_LABELS } from "../dateutils.js";
 
 // 计划写的是"4 Reps @ 70%"这种明确数字时，次数其实是教练定死的，不是
 // 用户要填的信息——只有重量是用户自己要算/要写的。次数框预填这个数字，
@@ -100,8 +92,6 @@ function formatTimeOfDay(iso) {
 export async function render(container) {
   let editingId = null;
   let recordDay = todayStr();
-  let pickerMonth = todayStr();
-  let pickerOpen = false;
   let records = await listAllWorkouts();
 
   // WOD 结构化模式的状态：选中某个 program 后才有值
@@ -145,8 +135,6 @@ export async function render(container) {
   const form = container.querySelector(".train-form");
   const dayBtn = container.querySelector("[data-day-btn]");
   const picker = container.querySelector(".todo-picker");
-  const pickerGrid = picker.querySelector(".cal-grid");
-  const pickerTitle = picker.querySelector(".cal-nav-title");
   const wodPickerEl = container.querySelector(".train-wod-picker");
   const titleInput = container.querySelector(".train-title");
   const manualEl = container.querySelector(".train-manual");
@@ -159,50 +147,16 @@ export async function render(container) {
 
   // ---------- 日期选择器（跟待办 tab 同一套组件） ----------
 
-  function paintDayPicker() {
-    dayBtn.textContent = recordDay === todayStr() ? "今天" : formatMonthDay(recordDay);
-    pickerTitle.textContent = formatMonthTitle(pickerMonth);
-    renderMonthGrid(pickerGrid, pickerMonth, {
-      selected: recordDay,
-      onPick: async (d) => {
-        recordDay = d;
-        pickerOpen = false;
-        picker.hidden = true;
-        paintDayPicker();
-        exitWodMode();
-        await paintWodPicker();
-      },
-    });
-  }
-
-  dayBtn.addEventListener("click", () => {
-    pickerOpen = !pickerOpen;
-    picker.hidden = !pickerOpen;
-    if (pickerOpen) {
-      pickerMonth = recordDay;
-      paintDayPicker();
-    }
-  });
-  picker.querySelectorAll(".cal-nav-btn").forEach((btn) =>
-    btn.addEventListener("click", () => {
-      pickerMonth = addMonths(pickerMonth, Number(btn.dataset.nav));
-      paintDayPicker();
-    }),
-  );
-  picker.querySelector(".todo-picker-today").addEventListener("click", async () => {
-    recordDay = todayStr();
-    pickerMonth = todayStr();
-    pickerOpen = false;
-    picker.hidden = true;
-    paintDayPicker();
-    exitWodMode();
-    await paintWodPicker();
-  });
-  document.addEventListener("click", (e) => {
-    if (pickerOpen && !container.querySelector(".train-day-row").contains(e.target)) {
-      pickerOpen = false;
-      picker.hidden = true;
-    }
+  const dayPicker = createDatePicker({
+    dateBtn: dayBtn,
+    picker,
+    outsideClickEl: container.querySelector(".train-day-row"),
+    getDate: () => recordDay,
+    onPick: async (d) => {
+      recordDay = d;
+      exitWodMode();
+      await paintWodPicker();
+    },
   });
 
   // ---------- WOD 选择 + 按段落勾选（SPEC.md §4.2 步骤①②） ----------
@@ -454,7 +408,7 @@ export async function render(container) {
     editingId = asCopy ? null : record.id;
     exitWodMode();
     recordDay = record.day;
-    paintDayPicker();
+    dayPicker.repaint();
     await paintWodPicker();
     thoughtsInput.value = "";
     submitBtn.textContent = asCopy ? "另存为新记录" : "保存修改";
@@ -616,7 +570,6 @@ export async function render(container) {
     }
   });
 
-  paintDayPicker();
   await paintWodPicker();
   await paintHistory();
 }

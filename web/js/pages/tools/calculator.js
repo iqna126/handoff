@@ -11,15 +11,15 @@
 // 四舍五入过的字符串"反推——那样滑动几次单位就会跟原始输入对不上
 // （125.25 lb 会飘到 125.24 lb 这种），必须全程从 kgValue 重新格式化。
 import { listPRs, getUnitPref } from "../../data.js";
-import { toDisplay, fromDisplay, formatWeight, kgToLb } from "../../units.js";
-
-const PCTS = [50, 60, 70, 75, 80, 85, 90, 95, 100, 105];
+import { toDisplay, fromDisplay } from "../../units.js";
+import { renderPctGrid } from "../../pctgrid.js";
+import { loadCatalog } from "../../catalog.js";
 
 export async function render(container, seed = {}) {
   let unit = seed.unit ?? (await getUnitPref());
   let kgValue = seed.kgValue ?? null; // 唯一的真相来源，永远是 kg，永远不四舍五入
 
-  const catalog = await fetch("/data/catalog.json").then((r) => r.json());
+  const catalog = await loadCatalog();
   const prs = await listPRs();
   const prChips = prs
     .map((p) => ({ pr: p, meta: catalog.PR_LIST.find((x) => x.k === p.movement_key) }))
@@ -65,19 +65,7 @@ export async function render(container, seed = {}) {
   }
 
   function paintPcts() {
-    pctGrid.innerHTML = PCTS.map((pct) => {
-      if (kgValue == null) {
-        return `<div class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}">
-          <div class="pct-cell__pct">${pct}%</div><div class="pct-cell__val">—</div>
-        </div>`;
-      }
-      const kg = (kgValue * pct) / 100;
-      const value = unit === "kg" ? kg : kgToLb(kg);
-      return `<div class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}">
-        <div class="pct-cell__pct">${pct}%</div>
-        <div class="pct-cell__val">${formatWeight(value)}</div>
-      </div>`;
-    }).join("");
+    renderPctGrid(pctGrid, kgValue, unit);
   }
 
   unitBtn.addEventListener("click", () => {

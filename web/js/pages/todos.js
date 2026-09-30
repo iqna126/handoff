@@ -1,14 +1,13 @@
 // 待办 tab（SPEC.md §2）：输入框 + 日期按钮，Enter 添加；自定义日期选择器
 // （周一开始，含"今天"快捷按钮）；未完成/已完成分组；删除二次确认。
-import { listTodos, addTodo, setTodoDone, deleteTodo } from "../data.js";
-import { renderMonthGrid } from "../calendar.js";
-import { todayStr, formatMonthDay, formatMonthTitle, addMonths } from "../dateutils.js";
-import { showConfirm, showAlert } from "../dialog.js";
+import { listTodos, addTodo, deleteTodo } from "../data.js";
+import { todayStr, formatMonthDay } from "../dateutils.js";
+import { showConfirm } from "../dialog.js";
+import { createDatePicker } from "../datepicker.js";
+import { bindTodoCheckbox } from "../todorow.js";
 
 export async function render(container) {
   let pickedDate = todayStr();
-  let pickerMonth = todayStr();
-  let pickerOpen = false;
 
   container.innerHTML = `
     <form class="todo-form">
@@ -38,60 +37,19 @@ export async function render(container) {
   const input = container.querySelector(".todo-input");
   const dateBtn = container.querySelector(".todo-date-btn");
   const picker = container.querySelector(".todo-picker");
-  const pickerGrid = picker.querySelector(".cal-grid");
-  const pickerTitle = picker.querySelector(".cal-nav-title");
   const openList = container.querySelector(".todo-list--open");
   const doneList = container.querySelector(".todo-list--done");
 
-  function dateBtnLabel() {
-    return pickedDate === todayStr() ? "今天" : formatMonthDay(pickedDate);
-  }
-
-  function paintPicker() {
-    dateBtn.textContent = dateBtnLabel();
-    pickerTitle.textContent = formatMonthTitle(pickerMonth);
-    renderMonthGrid(pickerGrid, pickerMonth, {
-      selected: pickedDate,
-      onPick: (d) => {
-        pickedDate = d;
-        pickerOpen = false;
-        picker.hidden = true;
-        paintPicker();
-      },
-    });
-  }
-  paintPicker();
-
-  dateBtn.addEventListener("click", () => {
-    pickerOpen = !pickerOpen;
-    picker.hidden = !pickerOpen;
-    if (pickerOpen) {
-      pickerMonth = pickedDate;
-      paintPicker();
-    }
-  });
-
-  picker.querySelectorAll(".cal-nav-btn").forEach((btn) =>
-    btn.addEventListener("click", () => {
-      pickerMonth = addMonths(pickerMonth, Number(btn.dataset.nav));
-      paintPicker();
-    }),
-  );
-
-  picker.querySelector(".todo-picker-today").addEventListener("click", () => {
-    pickedDate = todayStr();
-    pickerMonth = todayStr();
-    pickerOpen = false;
-    picker.hidden = true;
-    paintPicker();
-  });
-
-  // 点选择器外面关掉它——不用全屏遮罩，避免 SPEC.md §9.1 那一堆移动端弹层坑
-  document.addEventListener("click", (e) => {
-    if (pickerOpen && !form.contains(e.target)) {
-      pickerOpen = false;
-      picker.hidden = true;
-    }
+  // 不用全屏遮罩关闭弹层——避免 SPEC.md §9.1 那一堆移动端弹层坑，
+  // 具体开合/翻月/"今天"按钮逻辑跟训练 tab 共用同一个组件
+  createDatePicker({
+    dateBtn,
+    picker,
+    outsideClickEl: form,
+    getDate: () => pickedDate,
+    onPick: (d) => {
+      pickedDate = d;
+    },
   });
 
   async function refresh() {
@@ -122,21 +80,7 @@ function renderTodoRow(todo, onChange) {
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.checked = todo.done;
-  checkbox.addEventListener("change", async () => {
-    const next = checkbox.checked;
-    checkbox.disabled = true;
-    try {
-      await setTodoDone(todo.id, next);
-      await onChange();
-    } catch (err) {
-      // 写失败不吭声的话，用户会看到"勾上了"但下次打开其实没存住——见
-      // data.js 里 run() 的说明。这里把 checkbox 复位回写之前的状态，
-      // 让界面跟数据库保持一致，而不是让一个假的勾选状态留在屏幕上
-      checkbox.checked = !next;
-      checkbox.disabled = false;
-      await showAlert(`保存失败：${err.message}`);
-    }
-  });
+  bindTodoCheckbox(checkbox, todo, onChange);
 
   const label = document.createElement("span");
   label.className = "todo-row__title";

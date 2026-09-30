@@ -7,9 +7,10 @@
 // 记录的两条录入路径都还没做，这部分先不接——跟 PR 墙暂缓扫描是同一个原因。
 import { listUnlockedSkills, unlockSkill, lockSkill, listWishes, addWish, removeWish } from "../data.js";
 import { showConfirm, showAlert } from "../dialog.js";
+import { loadCatalog } from "../catalog.js";
 
 export async function render(container) {
-  const catalog = await fetch("/data/catalog.json").then((r) => r.json());
+  const catalog = await loadCatalog();
   let unlocked = new Set((await listUnlockedSkills()).map((s) => s.movement_key));
   let wished = new Set((await listWishes()).map((w) => w.movement_key));
   let query = "";
