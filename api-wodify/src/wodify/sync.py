@@ -15,14 +15,15 @@ import logging
 import urllib.error
 import urllib.request
 from datetime import date, timedelta
-from typing import Any, Callable
+from typing import Callable
 
 from . import parse, schedule
-from .client import Client, SessionExpired, VersionStale
+from .client import Client, JSONObject, SessionExpired, VersionStale
+from .schedule import WodRowDict
 
 logger = logging.getLogger(__name__)
 
-Transport = Callable[[str, dict, bytes], tuple[int, bytes]]
+Transport = Callable[[str, dict[str, str], bytes], tuple[int, bytes]]
 
 
 def week_dates(start: date) -> list[str]:
@@ -30,7 +31,7 @@ def week_dates(start: date) -> list[str]:
     return [(start + timedelta(days=i)).isoformat() for i in range(7)]
 
 
-def pull_day(c: Client, day: str) -> list[dict]:
+def pull_day(c: Client, day: str) -> list[WodRowDict]:
     """拉一天的 WOD，转成 wods 行——可能是 0～N 行。
 
     同一天可能同时排着多个 program（比如 CrossFit 和 Pump & Burn），各自的
@@ -57,7 +58,7 @@ def pull_day(c: Client, day: str) -> list[dict]:
     return rows
 
 
-def pull_week(c: Client, start: date) -> list[dict]:
+def pull_week(c: Client, start: date) -> list[WodRowDict]:
     """拉一整周的 WOD，转成 wods 行（一天可能产出 0～N 行，见 pull_day）。"""
     rows = []
     for day in week_dates(start):
@@ -65,7 +66,7 @@ def pull_week(c: Client, start: date) -> list[dict]:
     return rows
 
 
-def _default_transport(url: str, headers: dict, body: bytes) -> tuple[int, bytes]:
+def _default_transport(url: str, headers: dict[str, str], body: bytes) -> tuple[int, bytes]:
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -75,8 +76,8 @@ def _default_transport(url: str, headers: dict, body: bytes) -> tuple[int, bytes
 
 
 def _post_json(
-    url: str, token: str, body: dict[str, Any], *, transport: Transport | None = None
-) -> dict:
+    url: str, token: str, body: JSONObject, *, transport: Transport | None = None
+) -> JSONObject:
     transport = transport or _default_transport
     # urllib 默认的 User-Agent（"Python-urllib/x.y"）是已知的爬虫特征，真机测试时
     # 被 Cloudflare 挡在边缘层（403 error code 1010，请求根本没到 Worker 代码），
@@ -93,7 +94,7 @@ def _post_json(
 
 
 def push_to_worker(
-    ingest_url: str, sync_token: str, wods: list[dict], *, transport: Transport | None = None
+    ingest_url: str, sync_token: str, wods: list[WodRowDict], *, transport: Transport | None = None
 ) -> int:
     """批量 POST 一整周的数据，返回 Worker 实际写入的条数。
 

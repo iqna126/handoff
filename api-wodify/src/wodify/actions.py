@@ -12,12 +12,17 @@ Wodify 不签发只读令牌 —— 我们用的是完整会话登录，凭证�
 
 from __future__ import annotations
 
+from typing import Literal
+
+# 目前登记过的动作只有这三个——新增动作时这里和下面 ACTIONS 要一起加
+ActionName = Literal["schedule", "workout", "bookings"]
+
 # 2026-08 改版后，所有屏幕数据动作都带上了 WodifyClient_DataFetch_WB/ 前缀。
 # 但 ServiceAPI 风格的动作没有这个前缀（也没有 DataAction 中缀），
 # 所以前缀不能硬编码在拼接逻辑里，必须每个动作各自写全路径。
 DATA_FETCH = "WodifyClient_DataFetch_WB"
 
-ACTIONS: dict[str, str] = {
+ACTIONS: dict[ActionName, str] = {
     # 某一天的排课表：时间、教练、已约/上限、名称、时长、班级 ID
     "schedule": (
         f"{DATA_FETCH}/Schedule_OS/GetClassList_ForClient_WithReservationCounts_WB"
@@ -102,7 +107,7 @@ def _is_false_positive(low: str, marker: str) -> bool:
     return marker not in stripped
 
 
-def resolve(name: str) -> str:
+def resolve(name: ActionName) -> str:
     """动作名 → 完整路径。未登记就拒绝。"""
     if name not in ACTIONS:
         raise NotAllowed(f"动作未登记：{name!r}（可用：{sorted(ACTIONS)}）")
