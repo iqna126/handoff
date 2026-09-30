@@ -209,8 +209,8 @@ class Client:
         return payload
 
 
-def _is_bare_date(s: str) -> bool:
-    if len(s) != 10 or s[4] != "-" or s[7] != "-":
+def _is_bare_date(date_str: str) -> bool:
+    if len(date_str) != 10 or date_str[4] != "-" or date_str[7] != "-":
         return False
-    y, m, d = s[:4], s[5:7], s[8:10]
-    return y.isdigit() and m.isdigit() and d.isdigit()
+    year, month, day = date_str[:4], date_str[5:7], date_str[8:10]
+    return year.isdigit() and month.isdigit() and day.isdigit()

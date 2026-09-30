@@ -119,9 +119,11 @@ export function matchSkills(text) {
     const line = rawLine.trim();
     if (!line) return;
 
-    const eqm = line.match(/^(Barbell|Dumbbells?|Kettlebells?|Wall Ball|Wallball)\s*:\s*(.+)$/i);
-    if (eqm) {
-      blockWeight = eqm[2].trim();
+    const equipmentLine = line.match(
+      /^(Barbell|Dumbbells?|Kettlebells?|Wall Ball|Wallball)\s*:\s*(.+)$/i,
+    );
+    if (equipmentLine) {
+      blockWeight = equipmentLine[2].trim();
       return;
     }
     if (/^【/.test(line)) blockWeight = "";
