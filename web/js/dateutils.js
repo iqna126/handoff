@@ -88,3 +88,13 @@ export function formatReadableDateTime(isoString) {
   const mm = String(d.getMinutes()).padStart(2, "0");
   return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
 }
+
+// Wodify 课表时段（ISO 时间戳）→ 12 小时制时刻，训练 tab 约课提醒用
+export function formatTimeOfDay(iso) {
+  const timePart = iso.split("T")[1] || iso;
+  const [hh, mm] = timePart.split(":");
+  const h = Number(hh);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${mm} ${period}`;
+}

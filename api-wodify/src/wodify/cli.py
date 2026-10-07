@@ -16,7 +16,7 @@ import asyncio
 import sys
 from datetime import date
 
-from . import config, parse, prime, sync
+from . import config, parse, prime, schedule, sync
 from .client import Client, NotPrimed, SessionExpired, VersionStale
 
 
@@ -37,14 +37,14 @@ def print_workout(c: Client, day: str) -> int:
     """
     try:
         schedule_payload = c.query("schedule", date=day)
-        programs = parse.parse_schedule(schedule_payload)
+        programs = schedule.parse_schedule(schedule_payload)
         rows = []
         for program in programs:
             payload = c.query("workout", date=day, program_id=program["program_id"])
             parsed = parse.parse_workout(payload)
             if not parsed["sections"]:
                 continue
-            rows.append(parse.to_wod_row(day, parsed, payload))
+            rows.append(schedule.to_wod_row(day, parsed, payload))
     except (SessionExpired, VersionStale, NotPrimed) as e:
         print(str(e), file=sys.stderr)
         return 1
