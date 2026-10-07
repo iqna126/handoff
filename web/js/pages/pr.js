@@ -8,14 +8,14 @@
 // 从训练记录扫描 PR（§5.1）：扫全部训练记录，找出比当前 PR 更重的成绩，
 // 列出来问要不要批量更新——不需要用户重复手填，正常记录训练时 PR 自己浮出来。
 import { listPRs, upsertPR, deletePR, getUnitPref, listAllWorkouts } from "../data.js";
-import { toDisplay, fromDisplay, formatWeight, kgToLb } from "../units.js";
+import { toDisplay, fromDisplay } from "../units.js";
+import { renderPctGrid } from "../pctgrid.js";
+import { loadCatalog } from "../catalog.js";
 import { scanWorkoutsForPRs } from "../prscan.js";
 import { showConfirm, showAlert } from "../dialog.js";
 
-const PCTS = [50, 60, 70, 75, 80, 85, 90, 95, 100, 105];
-
 export async function render(container) {
-  const catalog = await fetch("/data/catalog.json").then((r) => r.json());
+  const catalog = await loadCatalog();
   let unit = await getUnitPref();
   let prs = await listPRs();
   let detailKey = null;
@@ -159,20 +159,7 @@ export async function render(container) {
     const pctGrid = container.querySelector(".pct-grid");
 
     function paintPcts() {
-      const base = fromDisplay(input.value, unit);
-      pctGrid.innerHTML = PCTS.map((pct) => {
-        if (base == null) {
-          return `<div class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}">
-            <div class="pct-cell__pct">${pct}%</div><div class="pct-cell__val">—</div>
-          </div>`;
-        }
-        const kg = (base * pct) / 100;
-        const value = unit === "kg" ? kg : kgToLb(kg);
-        return `<div class="pct-cell ${pct === 100 ? "pct-cell--hi" : ""}">
-          <div class="pct-cell__pct">${pct}%</div>
-          <div class="pct-cell__val">${formatWeight(value)}</div>
-        </div>`;
-      }).join("");
+      renderPctGrid(pctGrid, fromDisplay(input.value, unit), unit);
     }
 
     input.addEventListener("input", paintPcts);
