@@ -204,6 +204,34 @@ class TestScalingLevels:
             "RX 只应该被补一次，不能因为两个 Levels 组件各插一份"
         )
 
+    def test_level_name_as_its_own_paragraph_with_no_colon_is_recognized(self, payload):
+        """2026-10 真机数据证实过第三种格式：档位名单独一个
+        <p><strong>Level 2</strong></p> 段落，跟内容分属不同 <p>，转成行
+        之后"Level 2"自己占一行，没有冒号、同一行也没有内容（前两种已覆盖
+        的格式是"Level 2: 内容"全挤在一行，或者"Level 2:"后面跟着下一个
+        <p>）。_LEVEL_HEAD 原来要求冒号必须存在，这种格式一行都认不出来，
+        _attach_levels 跑完 levels 是空列表，用户端看不到任何分级选项。
+        """
+        components = payload["data"]["Response"]["ResponseWOD"]["ResponseWorkout"][
+            "WorkoutComponents"
+        ]["List"]
+        idx = next(
+            i for i, c in enumerate(components) if c.get("Name") == "[Business Time: Levels]"
+        )
+        components[idx]["Description"] = (
+            "<p><strong>Level 2</strong></p><p>7 rounds for reps</p>"
+            "<p><strong>Masters 55+</strong></p><p>5 rounds for reps</p>"
+        )
+
+        r = parse.parse_workout(payload)
+        metcon = next(s for s in r["sections"] if s["title"] == "Business Time")
+        names = [lv["name"] for lv in metcon["levels"]]
+        assert names == ["RX", "Level 2", "Masters 55+"], (
+            "档位名单独一行、没有冒号时也要能识别，不能因为没冒号就整段丢掉"
+        )
+        level2 = next(lv for lv in metcon["levels"] if lv["name"] == "Level 2")
+        assert level2["lines"] == ["7 rounds for reps"]
+
 
 class TestFieldTraps:
     def test_description_is_the_metcon_content(self, payload):

@@ -42,9 +42,14 @@ EMPTY_ID = "0"
 # 认的是同一套关键词，只是这边处理的是 API 返回的 HTML 组件，不是粘贴的
 # 纯文本行。
 _LEVELS_BLOCK = re.compile(r"^\[(.+?):\s*Levels?\]$", re.I)
+# 冒号可选：2026-10 真机数据证实过第二种格式——档位名单独一个
+# <p><strong>Level 2</strong></p> 段落，跟内容分属不同 <p>，转成行之后
+# "Level 2" 自己占一行，没有冒号也没有同行内容（旧格式是"Level 2: 内容"
+# 挤在同一行）。冒号原来是必需的，导致这种格式一行都认不出来，
+# `_attach_levels` 跑完 levels 是空列表，用户端看不到任何分级选项。
 _LEVEL_HEAD = re.compile(
     r"^(RX|Level\s*\d+|Masters\s*\d+\+?|Competitor|Scaled|Hotel Gym\s*/?\s*Travel|Travel|Beginner)"
-    r"\s*:\s*(.*)$",
+    r"\s*:?\s*(.*)$",
     re.I,
 )
 _BLOCK_CLOSE = re.compile(r"</(p|div|li)>", re.I)

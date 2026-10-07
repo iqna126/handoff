@@ -16,6 +16,10 @@ venv/
 dist/
 build/
 
+# Local scratch dirs (e.g. the dedicated prime Chrome profile) — may hold live
+# session cookies, never commit
+scratchpad/
+
 # Node / frontend tooling (for future web/)
 node_modules/
 
