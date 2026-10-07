@@ -137,11 +137,10 @@ def run_weekly_sync(
 ) -> int:
     """完整走一遍：拉一周 → 批量推给 Worker。
 
-    异常处理策略见 DESIGN.md §6.6 故障处理分层表：
-    - SessionExpired：上报后原样往上抛，人工重新登录后手动 prime，cli.py 决定退出码
-    - VersionStale：上报后原样往上抛。理论上"重新 prime 即可自动恢复"，但
-      prime.py 真正驱动 CDP 的那部分还没实现，这里没法真的自动重跑，只能先如实上报
-    - 其它异常：同样上报后往上抛，不在这里猜测原因或吞掉
+    三类异常（SessionExpired/VersionStale/其它）都是先上报再原样往上抛，
+    不在这里吞掉或自动重试——VersionStale 理论上"重新 prime 即可恢复"，但
+    prime 需要真人已登录的 Chrome，无人值守跑这个函数的环境没法自动触发。
+    完整的故障处理分层表见 DESIGN.md §6.6。
     """
     try:
         rows = pull_week(c, start)
