@@ -33,17 +33,15 @@ def mock_client(handler):
     return override
 
 
-def always_ok(request: httpx.Request) -> httpx.Response:
-    return httpx.Response(200, json=[])
-
-
 app.dependency_overrides[get_env] = lambda: FAKE_ENV
 client = TestClient(app)
 
 
 class TestTokenGuard:
     def setup_method(self):
-        app.dependency_overrides[get_http_client] = mock_client(always_ok)
+        app.dependency_overrides[get_http_client] = mock_client(
+            lambda request: httpx.Response(200, json=[])
+        )
 
     def test_missing_token_rejected(self):
         resp = client.post("/api/wod/ingest", json={"wods": []})
