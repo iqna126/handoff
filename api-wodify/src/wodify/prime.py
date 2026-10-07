@@ -60,13 +60,17 @@ WALK = (
 # 点击靠**匹配渲染出来的文字**，不靠 CSS class（Wodify 改版时 class 名比文字更容易
 # 变）：叶子节点（没有子元素）精确匹配文字才点，避免点中父容器。
 #
-# 2026-10 真机数据证实过：Schedule 页面换了个 mobiscroll 日历组件，选中某天后
-# 班级列表要等明显更久才渲染出来（原来 3.5s 够用，新组件实测经常要 7-8s），
-# 等得不够就会误判成"这天没有课"（`classes=0`），即使那天课表确实有内容。
+# 2026-10 真机数据证实过：Schedule 页面换了个 mobiscroll 日历组件，等得不够
+# 就会误判成"这天没有课"（`classes=0`），即使那天课表确实有内容——具体等待
+# 时长见下面 CALENDAR_RENDER_WAIT_MS/PAGE_NAV_WAIT_MS 的注释。
 WORKOUT_WALK_JS = r"""
 (async () => {
   const log = [];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // mobiscroll 日历组件渲染选中日期的班级列表，2026-10 真机实测要 7-8s
+  const CALENDAR_RENDER_WAIT_MS = 8000;
+  // 点进班级详情 / 点"Go to workout"之后，页面换一屏的实测耗时
+  const PAGE_NAV_WAIT_MS = 5000;
   const clickText = (txt) => {
     const els = [...document.querySelectorAll('*')].filter(
       e => e.childElementCount === 0 && e.textContent.trim() === txt);
@@ -83,8 +87,11 @@ WORKOUT_WALK_JS = r"""
   };
 
   log.push('schedule=' + clickText('Schedule'));
-  await sleep(8000);
-  if (__DATE_LABEL__) { log.push('date=' + clickAria(__DATE_LABEL__)); await sleep(8000); }
+  await sleep(CALENDAR_RENDER_WAIT_MS);
+  if (__DATE_LABEL__) {
+    log.push('date=' + clickAria(__DATE_LABEL__));
+    await sleep(CALENDAR_RENDER_WAIT_MS);
+  }
 
   const classPattern = /^[A-Za-z][^,]*:\s*\d{1,2}:\d{2}/;
   const classes = [...document.querySelectorAll('*')]
@@ -95,13 +102,13 @@ WORKOUT_WALK_JS = r"""
   if (!classes.length) return { ok: false, log, why: 'no classes on that date' };
 
   log.push('class=' + clickText(classes[0]));
-  await sleep(5000);
+  await sleep(PAGE_NAV_WAIT_MS);
   const hasLink = document.body.innerText.includes('Go to workout');
   log.push('hasGoToWorkout=' + hasLink);
   if (!hasLink) return { ok: false, log, why: 'no workout posted for that class' };
 
   log.push('goto=' + clickText('Go to workout'));
-  await sleep(5000);
+  await sleep(PAGE_NAV_WAIT_MS);
   return { ok: document.body.innerText.includes('WARM-UP'), log };
 })();
 """
