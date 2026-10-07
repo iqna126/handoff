@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from collections.abc import Callable
 from datetime import date
 
 from . import config, parse, prime, schedule, sync
@@ -38,7 +39,7 @@ def print_workout(c: Client, day: str) -> int:
     try:
         schedule_payload = c.query("schedule", date=day)
         programs = schedule.parse_schedule(schedule_payload)
-        rows = []
+        rows: list[schedule.WodRowDict] = []
         for program in programs:
             payload = c.query("workout", date=day, program_id=program["program_id"])
             parsed = parse.parse_workout(payload)
@@ -64,7 +65,14 @@ def print_workout(c: Client, day: str) -> int:
     return 0
 
 
-def run_week(c: Client, start: date, ingest_url: str, sync_token: str, *, transport=None) -> int:
+def run_week(
+    c: Client,
+    start: date,
+    ingest_url: str,
+    sync_token: str,
+    *,
+    transport: sync.Transport | None = None,
+) -> int:
     """拉一周并推给 Worker，打印结果。返回值是进程退出码。
 
     transport 透传给 sync.run_weekly_sync——不透传的话，测试注入到 c 上的假
@@ -153,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-_HANDLERS = {
+_HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
     "prime": cmd_prime,
     "workout": cmd_workout,
     "week": cmd_week,

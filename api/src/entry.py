@@ -12,8 +12,10 @@ Workers 的入口桥接在 worker.py，那边导入了只在 Workers/Pyodide 沙
 
 import hmac
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import Protocol
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -21,6 +23,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 logger = logging.getLogger("handoff-api")
+
+
+class Env(Protocol):
+    """Cloudflare Workers 绑定的环境变量/密钥对象。真实类型来自 Pyodide 沙盒
+    （worker.py 的 ASGI 桥接注入），这里只声明用到的属性方便类型检查——
+    不代表这些属性一定有值，好几处仍然要用 getattr(env, "X", "") 兜底，
+    因为对应的密钥/变量在某些环境里可能压根没配置。
+    """
+
+    SUPABASE_URL: str
+    SUPABASE_SERVICE_KEY: str
+    RESEND_API_KEY: str
+    ALERT_EMAIL: str
+    WODIFY_SYNC_TOKEN: str
+
 
 app = FastAPI()
 
@@ -34,19 +51,19 @@ app.add_middleware(
 
 
 @app.get("/api/health")
-async def health():
+async def health() -> dict[str, str]:
     """存活检查，不需要登录。"""
     return {"status": "ok"}
 
 
-def get_env(request: Request):
+def get_env(request: Request) -> Env:
     """Workers 的环境变量/密钥绑定。真实运行时来自 Cloudflare 的 ASGI 桥接
     （见 worker.py），测试时用 `app.dependency_overrides[get_env]` 换掉。
     """
     return request.scope["env"]
 
 
-def verify_sync_token(request: Request, env=Depends(get_env)) -> None:
+def verify_sync_token(request: Request, env: Env = Depends(get_env)) -> None:
     """校验 wodify-pull 常开机器带的 WODIFY_SYNC_TOKEN。
 
     恒定时间比较防时序攻击，反复错误记日志——这两条是之前安全复查时定下的，
@@ -66,13 +83,17 @@ class WodRow(BaseModel):
     day: str
     class_type: str
     title: str = ""
-    sections: list
-    raw: dict
+    sections: list[dict[str, object]]
+    raw: dict[str, object]
     source: str = "wodify_api"
     class_times: list[str] = []
 
 
 class ErrorReport(BaseModel):
+    # 不是闭集合——SessionExpired/VersionStale 是 sync.py 显式上报的两种，
+    # 但 run_weekly_sync 的兜底分支会把任何未预料到的异常类名
+    # （type(e).__name__）也当 kind 报上来，锁成 Literal 会拒绝这类真实的
+    # 兜底上报。
     kind: str
     detail: str
 
@@ -83,7 +104,7 @@ class IngestRequest(BaseModel):
 
 
 @asynccontextmanager
-async def _client_or(client: httpx.AsyncClient | None):
+async def _client_or(client: httpx.AsyncClient | None) -> AsyncIterator[httpx.AsyncClient]:
     """复用调用方传入的 client；没传就自己开一个，用完自己关。
 
     send_alert/upsert_wods/check_wods_freshness 三个函数都要支持"串用同一个
@@ -101,7 +122,7 @@ async def _client_or(client: httpx.AsyncClient | None):
 
 
 async def send_alert(
-    env, subject: str, body: str, *, client: httpx.AsyncClient | None = None
+    env: Env, subject: str, body: str, *, client: httpx.AsyncClient | None = None
 ) -> None:
     """统一的告警发送口子，走 Resend。
 
@@ -132,7 +153,9 @@ async def send_alert(
             logger.error("Resend 告警发送失败：%s %s", resp.status_code, resp.text)
 
 
-async def upsert_wods(env, wods: list[WodRow], *, client: httpx.AsyncClient | None = None) -> int:
+async def upsert_wods(
+    env: Env, wods: list[WodRow], *, client: httpx.AsyncClient | None = None
+) -> int:
     """批量 upsert 到共享的 wods 表，按 day+class_type 冲突时更新。
 
     一次传一整周，不是一天写一次——见 DESIGN.md §6.6「批量写入」。
@@ -156,7 +179,7 @@ async def upsert_wods(env, wods: list[WodRow], *, client: httpx.AsyncClient | No
     return len(wods)
 
 
-async def get_http_client():
+async def get_http_client() -> AsyncIterator[httpx.AsyncClient]:
     """出站 HTTP 客户端，真实运行时是普通 httpx.AsyncClient。
 
     测试时用 `app.dependency_overrides[get_http_client]` 换成套了
@@ -168,7 +191,11 @@ async def get_http_client():
 
 
 @app.post("/api/wod/ingest", dependencies=[Depends(verify_sync_token)])
-async def wod_ingest(body: IngestRequest, env=Depends(get_env), http=Depends(get_http_client)):
+async def wod_ingest(
+    body: IngestRequest,
+    env: Env = Depends(get_env),
+    http: httpx.AsyncClient = Depends(get_http_client),
+) -> dict[str, int]:
     """wodify-pull 常开机器专用：批量写入一整周的 WOD，或上报故障。
 
     不是给前端用的接口——靠 WODIFY_SYNC_TOKEN 校验，不认用户 JWT。
@@ -183,7 +210,7 @@ async def wod_ingest(body: IngestRequest, env=Depends(get_env), http=Depends(get
     return {"written": written}
 
 
-async def check_wods_freshness(env, *, client: httpx.AsyncClient | None = None) -> None:
+async def check_wods_freshness(env: Env, *, client: httpx.AsyncClient | None = None) -> None:
     """独立存活校验：今天的 wods 数据缺失就告警。
 
     不依赖常开机器自己每日校验——机器整体宕机时没法自我报告，见 DESIGN.md §6.6

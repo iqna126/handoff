@@ -33,8 +33,41 @@ from __future__ import annotations
 
 import html
 import re
+from typing import Literal, TypedDict
+
+from .client import JSONObject
 
 EMPTY_ID = "0"
+
+# 段落分类的完整闭集合——_title_kind/_kind_from_flags/_classify 只会返回
+# 这几个值之一（或 None）。
+Kind = Literal["warmup", "cooldown", "accessory", "metcon", "strength"]
+
+
+class Level(TypedDict):
+    """metcon 段落的一个 scaling 档位（RX/Level 2/Masters 55+/...）。"""
+
+    name: str
+    lines: list[str]
+
+
+class Section(TypedDict):
+    id: str
+    kind: Kind
+    title: str
+    score: str
+    lines: list[str]
+    meta: list[str]
+    equip: list[str]
+    levels: list[Level]
+
+
+class ParsedWorkout(TypedDict):
+    title: str
+    notes: str
+    sections: list[Section]
+    empty_reason: str | None
+
 
 # scaling 档位块：一个独立组件，Name 形如 "[No, I am Your Father: Levels]"，
 # 内容（Description/Comment）是好几个档位挤在一起的富文本 HTML——见
@@ -68,7 +101,7 @@ _LIFT_WORDS = re.compile(
 _METCON_SCORE = re.compile(r"(round|amrap|for time|emom|interval|cal|tabata)", re.I)
 
 
-def is_real(record: dict) -> bool:
+def is_real(record: JSONObject) -> bool:
     """过滤 OutSystems 的空记录占位符。
 
     Id 缺失时视为真实记录 —— 有些组件本来就不带 Id。
@@ -79,7 +112,7 @@ def is_real(record: dict) -> bool:
     return rid is None or str(rid) != EMPTY_ID
 
 
-def _title_kind(title: str) -> str | None:
+def _title_kind(title: str) -> Kind | None:
     """只认标题里的强结构信号（热身/收操/辅助），不猜 strength/metcon。
 
     这三类不管 Wodify 给这个组件打没打类型标记、打的是什么标记，都应该
@@ -98,7 +131,7 @@ def _title_kind(title: str) -> str | None:
     return None
 
 
-def _classify(title: str, scheme: str, flag_kind: str | None = None) -> str:
+def _classify(title: str, scheme: str, flag_kind: Kind | None = None) -> Kind:
     title_kind = _title_kind(title)
     if title_kind is not None:
         return title_kind
@@ -122,7 +155,7 @@ def _classify(title: str, scheme: str, flag_kind: str | None = None) -> str:
     return "metcon"
 
 
-def _kind_from_flags(comp: dict) -> str | None:
+def _kind_from_flags(comp: JSONObject) -> Kind | None:
     """Wodify 给每个组件自己打的内容类型标记：IsWarmup/IsGymnastics/
     IsWeightlifting/IsMetcon。真机抓包证实这些字段确实存在，且它们自己的
     App 显然是靠这些区分展示的——不是只有 IsSection 一种分段信号。
@@ -144,7 +177,7 @@ def _kind_from_flags(comp: dict) -> str | None:
     return None
 
 
-def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
+def parse_workout(payload: JSONObject, *, include_notes: bool = False) -> ParsedWorkout:
     """把 GetAllWorkoutData 的响应转成 {title, notes, sections[]}。
 
     拿不到内容时返回空 sections —— **不编造原因**。
@@ -162,8 +195,8 @@ def parse_workout(payload: dict, *, include_notes: bool = False) -> dict:
 
     components = (workout.get("WorkoutComponents") or {}).get("List") or []
 
-    sections: list[dict] = []
-    cur: dict | None = None
+    sections: list[Section] = []
+    cur: Section | None = None
 
     for comp in components:
         if not isinstance(comp, dict) or not is_real(comp):
@@ -269,7 +302,7 @@ def _html_to_lines(blob: str) -> list[str]:
     return [line.strip() for line in text.split("\n") if line.strip()]
 
 
-def _attach_levels(section: dict, raw_blob: str) -> None:
+def _attach_levels(section: Section, raw_blob: str) -> None:
     """把"[Xxx: Levels]"这个组件的内容拆成每个档位一段，**累加**进
     section["levels"]（不是覆盖）。
 
@@ -290,8 +323,8 @@ def _attach_levels(section: dict, raw_blob: str) -> None:
     levels，不然多个 Levels 组件会重复插入好几份 RX。
     """
     lines = _html_to_lines(raw_blob)
-    levels: list[dict] = []
-    cur_level: dict | None = None
+    levels: list[Level] = []
+    cur_level: Level | None = None
     for line in lines:
         m = _LEVEL_HEAD.match(line)
         if m:
