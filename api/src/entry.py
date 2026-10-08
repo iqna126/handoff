@@ -22,6 +22,8 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import wechat
+
 logger = logging.getLogger("handoff-api")
 
 
@@ -37,6 +39,8 @@ class Env(Protocol):
     RESEND_API_KEY: str
     ALERT_EMAIL: str
     WODIFY_SYNC_TOKEN: str
+    WECHAT_APP_ID: str
+    WECHAT_APP_SECRET: str
 
 
 app = FastAPI()
@@ -252,3 +256,45 @@ async def check_wods_freshness(env: Env, *, client: httpx.AsyncClient | None = N
                 "确实没有排课——不确定就都发一封，让人来判断，不在这里猜原因。",
                 client=c,
             )
+
+
+class WechatLoginRequest(BaseModel):
+    code: str
+
+
+class WechatLoginResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    is_new_user: bool
+
+
+@app.post("/api/wechat/login")
+async def wechat_login(
+    body: WechatLoginRequest,
+    env: Env = Depends(get_env),
+    http: httpx.AsyncClient = Depends(get_http_client),
+) -> WechatLoginResponse:
+    """小程序登录：code → openid → 查/建账号 → 签发 Supabase 会话。
+
+    不认用户 JWT（这本来就是登录前的第一步，没有 JWT 可认）——AppSecret
+    本身就是这个接口唯一的信任边界，见 wechat.py 的说明。
+
+    查不到 openid 记录时目前直接当新用户建号（DESIGN.md §7.2.1）——
+    "这个人是不是已经有网页版账号、要不要走邮箱验证关联"是另一个分支，
+    还没实现。
+    """
+    try:
+        openid = await wechat.exchange_code_for_openid(env, body.code, client=http)
+    except wechat.WechatApiError as exc:
+        raise HTTPException(status_code=401, detail=f"微信登录失败：{exc}") from exc
+
+    user_id = await wechat.find_user_id_by_openid(env, openid, client=http)
+    is_new_user = user_id is None
+    if is_new_user:
+        user_id = await wechat.create_wechat_user(env, openid, client=http)
+        email = wechat.placeholder_email(openid)
+    else:
+        email = await wechat.get_user_email(env, user_id, client=http)
+
+    tokens = await wechat.mint_session(env, email, client=http)
+    return WechatLoginResponse(**tokens, is_new_user=is_new_user)

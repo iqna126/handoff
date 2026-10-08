@@ -10,6 +10,8 @@ import json
 from types import SimpleNamespace
 
 import httpx
+import pytest
+from conftest import mock_client
 from fastapi.testclient import TestClient
 
 from entry import app, check_wods_freshness, get_env, get_http_client, send_alert, upsert_wods
@@ -22,19 +24,17 @@ FAKE_ENV = SimpleNamespace(
     ALERT_EMAIL="me@example.com",
 )
 
-
-def mock_client(handler):
-    """按 handler 的逻辑造一个假的出站 client，供 dependency_overrides 用。"""
-
-    async def override():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
-            yield c
-
-    return override
-
-
-app.dependency_overrides[get_env] = lambda: FAKE_ENV
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _fake_env():
+    # 每个测试前装好、测完清掉——不能只在模块顶层赋值一次：这个 app 单例
+    # 跟 test_wechat.py 共用，谁的测试模块后导入，谁的 get_env override
+    # 就会把这边覆盖掉，之前真实踩过这个坑（加了 test_wechat.py 那次）。
+    app.dependency_overrides[get_env] = lambda: FAKE_ENV
+    yield
+    app.dependency_overrides.pop(get_env, None)
 
 
 class TestTokenGuard:
