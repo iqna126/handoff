@@ -16,14 +16,33 @@ function repsFromPlan(planText) {
   return m ? m[1] : "";
 }
 
+// 只在"按组数展开成多行"之后、往每一行的计划文案里填之前去掉这个后缀——
+// 不改 section 本身的数据，标题、score 等其它展示位置照常保留"x N Sets"。
+function stripSetsCountSuffix(planText) {
+  return (planText || "")
+    .replace(/\s*[x×]\s*\d+\s*sets?\b/gi, "")
+    .replace(/\s*\(\s*\d+\s*sets?\s*\)/gi, "")
+    .trim();
+}
+
 // Wodify 有些"strength"段落标题带" + "（比如"Rope Climb + Supine Grip Bent
 // Over Barbell Row + Dual Dumbbell Hammer Curls"），真机数据证实过这种
 // 段落经常没有"Set N:"这种清晰的分组标记，"组数"只能靠 score 兜底猜——
-// 猜不出来就默认 3，"计划"列还会把同一句"Every 4:00 x 4 Sets"重复贴三遍，
-// 而且这种复合动作往往好几个器械用不同重量（杠铃一个、哑铃另一个），
-// "每组一个重量框"塞不下。
+// 猜不出来就默认 3。这种标题里一长串" + "连起来、又没有干净分隔的复合
+// 动作，暂时还是退回自由文本（见下面 else 分支），不在本次修复范围内。
 //
-// 但标题带"+"不等于内容一定没法结构化——如果段落本身就写了清楚的
+// 但"标题干净、内容里才是复合动作"这种情况不一样——真机数据证实过：标题
+// 只写"Front Squat"，内容却是"5 Front Squats @ 65-70%" / "+" /
+// "2/2 Turkish Get-Ups"，教练显然是把两个动作配对着做（见
+// splitCompoundMovements）。这种情况表格照样好用，只是"重量"要拆成两个
+// 动作各自一个输入框，不能揉成一个。
+//
+// 这个兜底分支展开成 N 行之后，"总共 N 组"这件事已经靠行数表达出来了，
+// 计划文案里"x N Sets"/"（N Sets）"这个总组数后缀在每一行里再出现一遍
+// 没有意义（真实反馈：用户看到"Every 4:00 x 5 Sets"在 5 行里各贴了一遍，
+// 以为是"每组内部又要做 5 组"，见 stripSetsCountSuffix）。
+//
+// 标题带"+"不等于内容一定没法结构化——如果段落本身就写了清楚的
 // "Set 1: ..."/"Set 2: ..."，说明教练已经把每组的内容拆好了，这种情况
 // 表格照样好用、不该被标题里的"+"连累退回自由文本。只有真的没有
 // "Set N:"结构、又是多动作复合的情况，才需要退回自由文本让用户自己写。
@@ -33,8 +52,41 @@ function isSingleMovementStrength(section) {
   return hasSetLines || !section.title.includes(" + ");
 }
 
+// 复合动作目前见过两种手写形状，都要认：
+// (a) "A 动作" / 独立一行"+" / "B 动作"（比如 Front Squat / + / Turkish Get-Up）
+// (b) "A 动作 + B 动作"写在同一行（比如 Weighted Pull-Ups + Pull-Ups，2026-11-08
+//     真机数据证实的——之前只认 (a) 这种形状，这种写法会直接漏判）
+// 只见过这两动作配对的形状，真遇到三个动作或者别的写法再扩展，不先猜。
+function splitCompoundMovements(lines) {
+  const plusIdx = lines.findIndex((l) => l === "+");
+  if (plusIdx > 0 && plusIdx < lines.length - 1) {
+    return [lines[plusIdx - 1], lines[plusIdx + 1]];
+  }
+  for (const line of lines) {
+    const parts = line.split(/\s\+\s/);
+    if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+      return [parts[0].trim(), parts[1].trim()];
+    }
+  }
+  return null;
+}
+
+// "5 Front Squats @ 65-70%" -> "Front Squats"：去掉开头的次数（"5 "/"2/2 "）
+// 和末尾的负荷说明（"@ 65-70%"），当输入框的短标签用；提取不出来就原样
+// 显示整行，不强求干净。
+function shortMovementLabel(lineText) {
+  const stripped = lineText
+    .replace(/^\s*\d+(\/\d+)?\s*/, "")
+    .replace(/\s*@.*$/, "")
+    .trim();
+  return stripped || lineText;
+}
+
 // 力量段：按"Set N: ..."这个模式自动预生成对应组数；识别不到就看 score
-// 里有没有"(N Sets)"，再没有就默认 3 组（SPEC.md §4.2 步骤②）
+// 里有没有"(N Sets)"，再没有就默认 3 组（SPEC.md §4.2 步骤②）。每一行的
+// `movements` 数组平时只有一项（label 留空，直接显示 plan），复合动作时
+// 有两项，各自一个重量输入框——两种情况用同一个形状，渲染/保存只写一套
+// 逻辑，不用到处 if 两条分支。
 function buildSetRows(section) {
   const lines = cleanLines(section.lines);
   const setLines = lines.filter((l) => /^Set\s+\d+:/i.test(l));
@@ -42,14 +94,33 @@ function buildSetRows(section) {
     return setLines.map((l) => {
       const m = l.match(/^Set\s+(\d+):\s*(.*)$/i);
       const plan = m[2].trim();
-      return { n: Number(m[1]), plan, weight: "", reps: repsFromPlan(plan) };
+      return { n: Number(m[1]), movements: [{ label: "", plan, weight: "" }], reps: repsFromPlan(plan) };
     });
   }
+
   const scoreMatch = (section.score || "").match(/(\d+)\s*sets?/i);
   const n = scoreMatch ? Number(scoreMatch[1]) : 3;
+
+  const compound = splitCompoundMovements(lines);
+  if (compound) {
+    // 复合动作几个动作的次数经常不一样（比如这次 Front Squat 是 5 次、
+    // Turkish Get-Up 是 2/2），不能只猜第一个动作的次数当全局次数——
+    // 次数栏留空让用户自己填，不强行预填错的数字。
+    return Array.from({ length: n }, (_, i) => ({
+      n: i + 1,
+      movements: compound.map((l) => ({ label: shortMovementLabel(l), plan: l, weight: "" })),
+      reps: "",
+    }));
+  }
+
   const planLine = lines.find((l) => l) || section.score || "";
   const reps = repsFromPlan(planLine);
-  return Array.from({ length: n }, (_, i) => ({ n: i + 1, plan: planLine, weight: "", reps }));
+  const perRowPlan = stripSetsCountSuffix(planLine);
+  return Array.from({ length: n }, (_, i) => ({
+    n: i + 1,
+    movements: [{ label: "", plan: perRowPlan, weight: "" }],
+    reps,
+  }));
 }
 
 function wodTitle(wod) {
@@ -198,16 +269,29 @@ export function createWodSectionEditor({
 
   function paintSectionBody(body, section, state) {
     if (isSingleMovementStrength(section)) {
+      // 复合动作（movements.length > 1）要给每个动作各自一个"重量"表头/
+      // 输入框；同一个 section 的所有行都来自同一个 buildSetRows 调用，
+      // 形状一致，看第一行就知道要不要展开成多列
+      const movementLabels = state.rows[0]?.movements.map((m) => m.label) || [""];
+      const weightHeaders =
+        movementLabels.length > 1
+          ? movementLabels.map((l) => `<th>${escapeHtml(l)}重量</th>`).join("")
+          : "<th>重量</th>";
       body.innerHTML = `
         <table class="set-table">
-          <thead><tr><th>组</th><th>计划</th><th>重量</th><th>次数</th></tr></thead>
+          <thead><tr><th>组</th><th>计划</th>${weightHeaders}<th>次数</th></tr></thead>
           <tbody>
             ${state.rows
               .map(
                 (r, i) => `<tr>
                   <td>${r.n}</td>
-                  <td class="set-table__plan">${r.plan || "—"}</td>
-                  <td><input type="text" inputmode="decimal" class="set-table__input" data-row="${i}" data-field="weight" placeholder="重量" value="${r.weight || ""}" /></td>
+                  <td class="set-table__plan">${escapeHtml(r.movements.map((m) => m.plan).join(" + ")) || "—"}</td>
+                  ${r.movements
+                    .map(
+                      (m, mi) =>
+                        `<td><input type="text" inputmode="decimal" class="set-table__input" data-row="${i}" data-movement="${mi}" placeholder="重量" value="${m.weight || ""}" /></td>`,
+                    )
+                    .join("")}
                   <td><input type="text" inputmode="numeric" class="set-table__input" data-row="${i}" data-field="reps" placeholder="次数" value="${r.reps || ""}" /></td>
                 </tr>`,
               )
@@ -215,9 +299,15 @@ export function createWodSectionEditor({
           </tbody>
         </table>
       `;
-      body.querySelectorAll("[data-row]").forEach((input) => {
+      body.querySelectorAll("[data-movement]").forEach((input) => {
         input.addEventListener("input", () => {
-          state.rows[Number(input.dataset.row)][input.dataset.field] = input.value;
+          state.rows[Number(input.dataset.row)].movements[Number(input.dataset.movement)].weight =
+            input.value;
+        });
+      });
+      body.querySelectorAll("[data-field='reps']").forEach((input) => {
+        input.addEventListener("input", () => {
+          state.rows[Number(input.dataset.row)].reps = input.value;
         });
       });
     } else if (section.kind === "metcon") {
@@ -279,15 +369,25 @@ export function createWodSectionEditor({
       lines.push(section.title);
       if (isSingleMovementStrength(section)) {
         for (const r of state.rows) {
-          // 次数现在默认从计划里预填（见 buildSetRows/repsFromPlan），不再是
-          // "用户填过东西"的信号——一组只要没填重量，就当用户没做/没记这组，
-          // 跳过它，不能只看 reps 是否有值（默认预填的话永远有值，会导致
-          // 用户完全没碰过的行也被当成"做过"存进记录里）
-          if (!r.weight) continue;
-          const weightPart = r.weight ? `${r.weight}lb` : "";
+          // 一组里但凡有一个动作填了重量就算做过这组——"完全没填任何一个
+          // 动作的重量"才当用户没做/没记，跳过（不能只看 reps，次数现在
+          // 默认从计划里预填，永远有值，不能当"填过东西"的信号）
+          const doneMovements = r.movements.filter((m) => m.weight);
+          if (doneMovements.length === 0) continue;
           const repsPart = r.reps ? `1x${r.reps}` : "";
-          const planPart = r.plan ? `（计划：${r.plan}）` : "";
-          lines.push(`${section.title} ${weightPart} ${repsPart} ${planPart}`.trim());
+          if (r.movements.length > 1) {
+            // 复合动作：每个动作的重量分开列出来，不能揉成一行——合在一起
+            // 没法知道哪个数字对应哪个动作
+            const movementParts = doneMovements
+              .map((m) => `${m.label || m.plan}: ${m.weight}lb`)
+              .join("，");
+            lines.push(`${section.title} ${movementParts} ${repsPart}`.trim());
+          } else {
+            const only = r.movements[0];
+            const weightPart = only.weight ? `${only.weight}lb` : "";
+            const planPart = only.plan ? `（计划：${only.plan}）` : "";
+            lines.push(`${section.title} ${weightPart} ${repsPart} ${planPart}`.trim());
+          }
         }
       } else if (section.kind === "metcon") {
         const hasLevels = state.levels.length > 0;
